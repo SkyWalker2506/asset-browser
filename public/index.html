@@ -109,6 +109,15 @@
   .miss .btn.danger:hover { background:#7a1f1f; }
   .miss .preview { margin:8px 0; padding:8px; background:#2a1f15; border:1px dashed #5c4428; border-radius:4px; display:flex; align-items:center; gap:8px; }
   .miss .preview img { max-height:64px; max-width:128px; }
+  .up-preview { margin:10px 0; padding:10px; background:
+    linear-gradient(45deg, #1a1510 25%, transparent 25%),
+    linear-gradient(-45deg, #1a1510 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1a1510 75%),
+    linear-gradient(-45deg, transparent 75%, #1a1510 75%); background-color: #2a1f15;
+    background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    border:1px solid #5c4428; border-radius:4px; text-align:center; }
+  .up-preview img { max-width:100%; max-height:200px; object-fit:contain; cursor:zoom-in; }
+  .up-name { font-size:11px; color:#8b6b3d; margin-top:4px; word-break:break-all; }
   .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2a1f15; color:#e8dcc0; padding:10px 18px; border-radius:6px; border:1px solid #d4a849; z-index:200; font-size:13px; opacity:0; transition:opacity .2s; }
   .toast.show { opacity:1; }
   .pri-P0 { background:#7a1f1f; color:#fff; }
@@ -127,9 +136,12 @@
 <header>
   <h1>MedievalFactory — Asset Browser</h1>
   <span class="meta" id="meta">loading…</span>
-  <div class="tabs" style="display:flex;gap:6px;">
+  <div class="tabs" style="display:flex;gap:6px;flex-wrap:wrap;">
     <button class="tab active" data-tab="have">Mevcut</button>
-    <button class="tab" data-tab="missing">Eksikler</button>
+    <button class="tab" data-tab="todo">Eksik</button>
+    <button class="tab" data-tab="waiting">Bekleyen</button>
+    <button class="tab" data-tab="approved">Onaylı</button>
+    <button class="tab" data-tab="denied">Reddedilen</button>
   </div>
   <div class="controls">
     <input id="q" placeholder="Ara (isim)…">
@@ -170,10 +182,27 @@ async function load() {
   render();
 }
 
+const STATUS_FOR_TAB = {
+  todo: s => s === 'todo' || s === 'in-progress',
+  waiting: s => s === 'waiting-for-review',
+  approved: s => s === 'approved',
+  denied: s => s === 'denied',
+};
+
+function itemsForTab() {
+  if (tab === 'have') return data.items;
+  const fn = STATUS_FOR_TAB[tab];
+  return missing.items.filter(i => fn(i.status));
+}
+
 function updateMeta() {
   const el = document.getElementById('meta');
   if (tab === 'have') el.textContent = `${data.count} asset · updated ${new Date(data.generated).toLocaleString()}`;
-  else el.textContent = `${missing.items.length} eksik · updated ${missing.updated || '—'}`;
+  else {
+    const count = itemsForTab().length;
+    const label = { todo: 'eksik', waiting: 'bekleyen', approved: 'onaylı', denied: 'reddedilen' }[tab];
+    el.textContent = `${count} ${label} · updated ${missing.updated || '—'}`;
+  }
 }
 
 function buildCatSelect() {
@@ -219,23 +248,28 @@ function activateChip(el) {
 function render() {
   const g = document.getElementById('grid');
   const q = filter.q.toLowerCase();
-  if (tab === 'missing') {
-    const filtered = missing.items.filter(i =>
+  if (tab !== 'have') {
+    const src = itemsForTab();
+    const filtered = src.filter(i =>
       (!q || i.name.toLowerCase().includes(q)) &&
       (!filter.kind || i.kind === filter.kind) &&
       (!filter.type || i.type === filter.type)
     );
-    if (!filtered.length) { g.innerHTML = '<div class="empty">Eksik yok.</div>'; return; }
+    if (!filtered.length) { g.innerHTML = `<div class="empty">Liste boş.</div>`; return; }
     g.innerHTML = filtered.map(i => {
-      const isTodo = i.status === 'todo' || i.status === 'in-progress' || i.status === 'denied';
-      const isReview = i.status === 'waiting-for-review';
+      const preview = i.uploadedFile
+        ? `<div class="up-preview"><img src="./uploads/${i.uploadedFile}?t=${Date.now()}"><div class="up-name">${i.uploadedFile}</div></div>` : '';
       const deny = i.status === 'denied' && i.denyReason ? `<div class="deny-reason"><b>Reddedildi:</b> ${escapeHtml(i.denyReason)}</div>` : '';
-      const preview = isReview && i.uploadedFile
-        ? `<div class="preview"><img src="./uploads/${i.uploadedFile}?t=${Date.now()}"><div style="font-size:11px;color:#c9b889;">${i.uploadedFile}</div></div>` : '';
       const actions = [];
-      if (i.prompt) actions.push(`<button class="btn primary" onclick="copyPrompt(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Prompt Kopyala</button>`);
-      if (isTodo) actions.push(`<button class="btn" onclick="uploadFor(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Upload</button>`);
-      if (isReview) actions.push(`<button class="btn danger" onclick="deleteUpload(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Sil</button>`);
+      const qn = JSON.stringify(i.name).replace(/"/g, '&quot;');
+      if (i.prompt && (i.status === 'todo' || i.status === 'in-progress' || i.status === 'denied')) actions.push(`<button class="btn primary" onclick="copyPrompt(${qn})">Prompt Kopyala</button>`);
+      if (i.status === 'todo' || i.status === 'in-progress' || i.status === 'denied') actions.push(`<button class="btn" onclick="uploadFor(${qn})">Upload</button>`);
+      if (i.status === 'waiting-for-review') {
+        actions.push(`<button class="btn primary" onclick="reviewAction(${qn},'approve')">Onayla</button>`);
+        actions.push(`<button class="btn danger" onclick="reviewAction(${qn},'deny')">Reddet</button>`);
+        actions.push(`<button class="btn" onclick="deleteUpload(${qn})">Sil</button>`);
+      }
+      if (i.uploadedFile) actions.push(`<a class="btn" href="./uploads/${i.uploadedFile}" download="${i.uploadedFile}">İndir</a>`);
       return `
       <div class="miss" id="miss-${cssEsc(i.name)}">
         <h3>${i.name}</h3>
@@ -247,8 +281,8 @@ function render() {
         </div>
         <div class="notes">${i.notes || ''}</div>
         ${deny}
-        ${i.prompt ? `<div class="prompt">${escapeHtml(i.prompt)}</div>` : ''}
         ${preview}
+        ${i.prompt && (i.status!=='approved') ? `<div class="prompt">${escapeHtml(i.prompt)}</div>` : ''}
         <div class="actions">${actions.join('')}</div>
       </div>`;
     }).join('');
@@ -278,9 +312,11 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   tab = t.dataset.tab;
-  document.querySelectorAll('.controls select, #chips').forEach(el => {
-    el.style.display = tab === 'missing' && el.id !== 'type' ? 'none' : '';
+  const inMissing = tab !== 'have';
+  document.querySelectorAll('.controls select').forEach(el => {
+    el.style.display = (inMissing && el.id !== 'type') ? 'none' : '';
   });
+  document.getElementById('chips').style.display = inMissing ? 'none' : '';
   updateMeta();
   render();
 });
@@ -331,6 +367,25 @@ function uploadFor(name) {
     reader.readAsDataURL(file);
   };
   inp.click();
+}
+
+async function reviewAction(name, action) {
+  let reason;
+  if (action === 'deny') {
+    reason = prompt(`${name} — neden reddediyorsun?`);
+    if (!reason) return;
+  } else if (!confirm(`${name} — onaylansın mı?`)) return;
+  try {
+    const r = await fetch('/api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, action, reason }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'review failed');
+    toast(action === 'approve' ? 'Onaylandı' : 'Reddedildi');
+    setTimeout(load, 800);
+  } catch (e) { toast(String(e.message), 'err'); }
 }
 
 async function deleteUpload(name) {
