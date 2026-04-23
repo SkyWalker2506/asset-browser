@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MedievalFactory — Asset Browser</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1a1510; color: #e8dcc0;
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: linear-gradient(180deg, #2a1f15 0%, #1a1510 100%);
+    padding: 16px 24px; border-bottom: 2px solid #8b6b3d;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  }
+  h1 { margin: 0; font-size: 22px; color: #d4a849; }
+  .meta { color: #8b6b3d; font-size: 13px; }
+  .controls { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  input, select {
+    background: #0f0b07; color: #e8dcc0; border: 1px solid #5c4428;
+    padding: 8px 12px; border-radius: 4px; font-size: 14px;
+  }
+  input { min-width: 220px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 24px; background: #110d08; border-bottom: 1px solid #3a2d1d; }
+  .chip {
+    padding: 5px 12px; border-radius: 16px; background: #2a1f15; border: 1px solid #5c4428;
+    cursor: pointer; font-size: 12px; color: #c9b889; user-select: none; transition: all .15s;
+  }
+  .chip:hover { border-color: #d4a849; }
+  .chip.active { background: #d4a849; color: #1a1510; border-color: #d4a849; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px; padding: 16px 24px;
+  }
+  .card {
+    background: #0f0b07; border: 1px solid #3a2d1d; border-radius: 6px;
+    overflow: hidden; cursor: pointer; transition: transform .15s, border-color .15s;
+    display: flex; flex-direction: column;
+  }
+  .card:hover { transform: translateY(-2px); border-color: #d4a849; }
+  .thumb {
+    aspect-ratio: 1; background:
+      linear-gradient(45deg, #1a1510 25%, transparent 25%),
+      linear-gradient(-45deg, #1a1510 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #1a1510 75%),
+      linear-gradient(-45deg, transparent 75%, #1a1510 75%);
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    background-color: #2a1f15;
+    display: flex; align-items: center; justify-content: center; padding: 8px;
+  }
+  .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: -webkit-optimize-contrast; }
+  .info { padding: 8px 10px; font-size: 12px; }
+  .info .n { color: #e8dcc0; font-weight: 600; word-break: break-word; }
+  .info .d { color: #8b6b3d; font-size: 10px; margin-top: 2px; display: flex; justify-content: space-between; }
+  .tag { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 8px; background: #3a2d1d; color: #c9b889; margin-top: 4px; }
+  .dl {
+    display: block; margin-top: 8px; text-align: center; background: #5c4428; color: #e8dcc0;
+    text-decoration: none; padding: 6px; border-radius: 4px; font-size: 11px; font-weight: 600;
+    transition: background .15s;
+  }
+  .dl:hover { background: #d4a849; color: #1a1510; }
+  .modal .dl { margin-top: 12px; padding: 10px; font-size: 13px; }
+  /* modal */
+  .modal {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none;
+    align-items: center; justify-content: center; z-index: 100; padding: 24px;
+  }
+  .modal.open { display: flex; }
+  .modal .box {
+    background: #1a1510; border: 2px solid #d4a849; border-radius: 8px;
+    max-width: 90vw; max-height: 90vh; overflow: auto; padding: 20px;
+    display: grid; grid-template-columns: 1fr auto; gap: 20px;
+  }
+  .modal .preview {
+    min-width: 400px; min-height: 400px; max-width: 60vw; max-height: 80vh;
+    background-color: #2a1f15;
+    background-image:
+      linear-gradient(45deg, #1a1510 25%, transparent 25%),
+      linear-gradient(-45deg, #1a1510 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #1a1510 75%),
+      linear-gradient(-45deg, transparent 75%, #1a1510 75%);
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal .preview img { max-width: 100%; max-height: 100%; }
+  .modal .details { min-width: 240px; font-size: 13px; }
+  .modal .details h2 { margin: 0 0 12px; color: #d4a849; font-size: 16px; word-break: break-word; }
+  .modal .details .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #3a2d1d; }
+  .modal .details .row .k { color: #8b6b3d; }
+  .modal .close { position: absolute; top: 16px; right: 24px; font-size: 28px; color: #d4a849; cursor: pointer; background: none; border: none; }
+  .empty { text-align: center; padding: 60px; color: #8b6b3d; }
+  .tab { background: #2a1f15; border: 1px solid #5c4428; color: #c9b889; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .tab:hover { border-color: #d4a849; }
+  .tab.active { background: #d4a849; color: #1a1510; border-color: #d4a849; }
+  .miss { background:#0f0b07; border:1px solid #3a2d1d; border-radius:6px; padding:14px; }
+  .miss h3 { margin:0 0 8px; color:#e8dcc0; font-size:14px; }
+  .miss .meta { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .miss .notes { font-size:12px; color:#c9b889; line-height:1.5; margin-bottom:8px; }
+  .miss .prompt { font-size:11px; color:#8b6b3d; background:#0f0b07; border:1px solid #3a2d1d; border-radius:4px; padding:8px; max-height:80px; overflow:auto; font-family:ui-monospace,Menlo,monospace; white-space:pre-wrap; margin-bottom:8px; }
+  .miss .actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .miss .btn { flex:1; min-width:100px; padding:7px 10px; border-radius:4px; border:1px solid #5c4428; background:#2a1f15; color:#e8dcc0; font-size:11px; cursor:pointer; text-align:center; font-weight:600; }
+  .miss .btn:hover { border-color:#d4a849; background:#3a2d1d; }
+  .miss .btn.primary { background:#5c4428; }
+  .miss .btn.primary:hover { background:#d4a849; color:#1a1510; }
+  .miss .btn.danger { background:#4d1f1f; border-color:#7a1f1f; }
+  .miss .btn.danger:hover { background:#7a1f1f; }
+  .miss .preview { margin:8px 0; padding:8px; background:#2a1f15; border:1px dashed #5c4428; border-radius:4px; display:flex; align-items:center; gap:8px; }
+  .miss .preview img { max-height:64px; max-width:128px; }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2a1f15; color:#e8dcc0; padding:10px 18px; border-radius:6px; border:1px solid #d4a849; z-index:200; font-size:13px; opacity:0; transition:opacity .2s; }
+  .toast.show { opacity:1; }
+  .pri-P0 { background:#7a1f1f; color:#fff; }
+  .pri-P1 { background:#7a4a1f; color:#fff; }
+  .pri-P2 { background:#3a2d1d; color:#c9b889; }
+  .st-todo { background:#3a2d1d; color:#8b6b3d; }
+  .st-in-progress { background:#2a4d7a; color:#fff; }
+  .st-waiting-for-review { background:#7a6a1f; color:#fff; }
+  .st-denied { background:#7a1f1f; color:#fff; }
+  .st-approved, .st-done { background:#2a5a2a; color:#fff; }
+  .st-blocked { background:#4d2a2a; color:#fff; }
+  .deny-reason { margin:8px 0; padding:8px 10px; background:#2a0f0f; border-left:3px solid #c94d4d; color:#f4c0c0; font-size:12px; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MedievalFactory — Asset Browser</h1>
+  <span class="meta" id="meta">loading…</span>
+  <div class="tabs" style="display:flex;gap:6px;">
+    <button class="tab active" data-tab="have">Mevcut</button>
+    <button class="tab" data-tab="missing">Eksikler</button>
+  </div>
+  <div class="controls">
+    <input id="q" placeholder="Ara (isim)…">
+    <select id="type">
+      <option value="">Tüm tipler</option>
+      <option value="Resim">Resim</option>
+      <option value="Animasyon">Animasyon</option>
+    </select>
+    <select id="cat">
+      <option value="">Tüm kategoriler</option>
+    </select>
+    <select id="ext">
+      <option value="">Tüm formatlar</option>
+    </select>
+  </div>
+</header>
+<div class="chips" id="chips"></div>
+<div class="grid" id="grid"></div>
+<div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
+  <button class="close" onclick="closeModal()">×</button>
+  <div class="box" id="box"></div>
+</div>
+<script>
+let data = { items: [] };
+let missing = { items: [] };
+let tab = 'have';
+let filter = { q: '', cat: '', ext: '', kind: '', type: '' };
+
+async function load() {
+  const [r, m] = await Promise.all([
+    fetch('./manifest.json?' + Date.now()).then(x => x.json()),
+    fetch('./missing.json?' + Date.now()).then(x => x.json()).catch(() => ({ items: [] })),
+  ]);
+  data = r; missing = m;
+  updateMeta();
+  buildChips();
+  buildCatSelect();
+  render();
+}
+
+function updateMeta() {
+  const el = document.getElementById('meta');
+  if (tab === 'have') el.textContent = `${data.count} asset · updated ${new Date(data.generated).toLocaleString()}`;
+  else el.textContent = `${missing.items.length} eksik · updated ${missing.updated || '—'}`;
+}
+
+function buildCatSelect() {
+  fillSelect('cat', [...new Set(data.items.map(i => i.category))].sort());
+  fillSelect('ext', [...new Set(data.items.map(i => i.ext))].sort().map(e => e.toUpperCase()));
+}
+function fillSelect(id, values) {
+  const sel = document.getElementById(id);
+  values.forEach(v => {
+    if ([...sel.options].some(o => o.value.toLowerCase() === String(v).toLowerCase())) return;
+    const o = document.createElement('option');
+    o.value = id === 'ext' ? String(v).toLowerCase() : v;
+    o.textContent = v;
+    sel.appendChild(o);
+  });
+}
+
+function buildChips() {
+  const kinds = [...new Set(data.items.map(i => i.kind))].sort();
+  const c = document.getElementById('chips');
+  c.innerHTML = '';
+  const all = chip('Tümü', ''); all.classList.add('active');
+  all.onclick = () => { filter.kind = ''; activateChip(all); render(); };
+  c.appendChild(all);
+  kinds.forEach(k => {
+    const ch = chip(`${k} (${data.items.filter(i => i.kind === k).length})`, k);
+    ch.onclick = () => { filter.kind = k; activateChip(ch); render(); };
+    c.appendChild(ch);
+  });
+}
+
+function chip(label, value) {
+  const e = document.createElement('div');
+  e.className = 'chip'; e.textContent = label; e.dataset.v = value;
+  return e;
+}
+
+function activateChip(el) {
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function render() {
+  const g = document.getElementById('grid');
+  const q = filter.q.toLowerCase();
+  if (tab === 'missing') {
+    const filtered = missing.items.filter(i =>
+      (!q || i.name.toLowerCase().includes(q)) &&
+      (!filter.kind || i.kind === filter.kind) &&
+      (!filter.type || i.type === filter.type)
+    );
+    if (!filtered.length) { g.innerHTML = '<div class="empty">Eksik yok.</div>'; return; }
+    g.innerHTML = filtered.map(i => {
+      const isTodo = i.status === 'todo' || i.status === 'in-progress' || i.status === 'denied';
+      const isReview = i.status === 'waiting-for-review';
+      const deny = i.status === 'denied' && i.denyReason ? `<div class="deny-reason"><b>Reddedildi:</b> ${escapeHtml(i.denyReason)}</div>` : '';
+      const preview = isReview && i.uploadedFile
+        ? `<div class="preview"><img src="./uploads/${i.uploadedFile}?t=${Date.now()}"><div style="font-size:11px;color:#c9b889;">${i.uploadedFile}</div></div>` : '';
+      const actions = [];
+      if (i.prompt) actions.push(`<button class="btn primary" onclick="copyPrompt(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Prompt Kopyala</button>`);
+      if (isTodo) actions.push(`<button class="btn" onclick="uploadFor(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Upload</button>`);
+      if (isReview) actions.push(`<button class="btn danger" onclick="deleteUpload(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Sil</button>`);
+      return `
+      <div class="miss" id="miss-${cssEsc(i.name)}">
+        <h3>${i.name}</h3>
+        <div class="meta">
+          <span class="tag pri-${i.priority}">${i.priority}</span>
+          <span class="tag st-${i.status}">${i.status}</span>
+          <span class="tag">${i.kind}</span>
+          <span class="tag" style="background:${i.type==='Animasyon'?'#8b4d1e':'#3a2d1d'}">${i.type}</span>
+        </div>
+        <div class="notes">${i.notes || ''}</div>
+        ${deny}
+        ${i.prompt ? `<div class="prompt">${escapeHtml(i.prompt)}</div>` : ''}
+        ${preview}
+        <div class="actions">${actions.join('')}</div>
+      </div>`;
+    }).join('');
+    return;
+  }
+  const filtered = data.items.filter(i =>
+    (!q || i.name.toLowerCase().includes(q)) &&
+    (!filter.cat || i.category === filter.cat) &&
+    (!filter.ext || i.ext === filter.ext) &&
+    (!filter.kind || i.kind === filter.kind) &&
+    (!filter.type || i.type === filter.type)
+  );
+  if (!filtered.length) { g.innerHTML = '<div class="empty">Eşleşen asset yok.</div>'; return; }
+  g.innerHTML = filtered.map(i => `
+    <div class="card">
+      <div class="thumb" onclick="openModal('${i.id}')"><img loading="lazy" src="${i.src}" alt="${i.name}"></div>
+      <div class="info">
+        <div class="n">${i.name}</div>
+        <div class="d"><span>${i.dim || '—'}</span><span>${fmtSize(i.size)}</span></div>
+        <span class="tag">${i.kind}</span> <span class="tag" style="background:${i.type==='Animasyon'?'#8b4d1e':'#3a2d1d'}">${i.type}</span>
+        <a class="dl" href="${i.src}" download="${i.file}" onclick="event.stopPropagation()">İndir</a>
+      </div>
+    </div>`).join('');
+}
+
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  tab = t.dataset.tab;
+  document.querySelectorAll('.controls select, #chips').forEach(el => {
+    el.style.display = tab === 'missing' && el.id !== 'type' ? 'none' : '';
+  });
+  updateMeta();
+  render();
+});
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
+function cssEsc(s) { return String(s).replace(/[^a-z0-9_-]/gi, '_'); }
+
+function toast(msg, kind = 'ok') {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.style.borderColor = kind === 'err' ? '#c94d4d' : '#d4a849';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+async function copyPrompt(name) {
+  const i = missing.items.find(x => x.name === name);
+  if (!i?.prompt) return toast('Prompt yok', 'err');
+  await navigator.clipboard.writeText(i.prompt);
+  toast('Prompt kopyalandı');
+}
+
+function uploadFor(name) {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/png,image/webp,image/gif,image/jpeg';
+  inp.onchange = async () => {
+    const file = inp.files[0]; if (!file) return;
+    if (file.size > 20 * 1024 * 1024) return toast('20MB üstü kabul edilmiyor', 'err');
+    toast('Yükleniyor…');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataBase64 = String(reader.result).split(',')[1];
+      try {
+        const r = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, filename: file.name, dataBase64 }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || 'upload failed');
+        toast('Yüklendi — waiting-for-review');
+        setTimeout(load, 800);
+      } catch (e) { toast(String(e.message), 'err'); }
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+async function deleteUpload(name) {
+  if (!confirm(`${name} upload'unu silmek istediğine emin misin?`)) return;
+  try {
+    const r = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'delete failed');
+    toast('Silindi');
+    setTimeout(load, 800);
+  } catch (e) { toast(String(e.message), 'err'); }
+}
+
+function fmtSize(b) {
+  if (b < 1024) return b + 'B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + 'KB';
+  return (b / 1024 / 1024).toFixed(2) + 'MB';
+}
+
+function openModal(id) {
+  const i = data.items.find(x => x.id === id);
+  if (!i) return;
+  document.getElementById('box').innerHTML = `
+    <div class="preview"><img src="${i.src}"></div>
+    <div class="details">
+      <h2>${i.name}</h2>
+      <div class="row"><span class="k">Kategori</span><span>${i.category}</span></div>
+      <div class="row"><span class="k">Tip</span><span>${i.type}</span></div>
+      <div class="row"><span class="k">Tür</span><span>${i.kind}</span></div>
+      <div class="row"><span class="k">Format</span><span>${i.ext.toUpperCase()}</span></div>
+      <div class="row"><span class="k">Boyut</span><span>${i.dim || '—'}</span></div>
+      <div class="row"><span class="k">Dosya</span><span>${fmtSize(i.size)}</span></div>
+      <div class="row"><span class="k">Dosya adı</span><span style="word-break:break-all;">${i.file}</span></div>
+      <div class="row"><span class="k">Güncellenme</span><span>${new Date(i.mtime).toLocaleDateString()}</span></div>
+      <a class="dl" href="${i.src}" download="${i.file}">İndir (${i.ext.toUpperCase()})</a>
+    </div>`;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+document.getElementById('q').oninput = e => { filter.q = e.target.value; render(); };
+document.getElementById('cat').onchange = e => { filter.cat = e.target.value; render(); };
+document.getElementById('ext').onchange = e => { filter.ext = e.target.value; render(); };
+document.getElementById('type').onchange = e => { filter.type = e.target.value; render(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+load();
+</script>
+</body>
+</html>
