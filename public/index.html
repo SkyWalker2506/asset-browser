@@ -173,7 +173,7 @@ let filter = { q: '', cat: '', ext: '', kind: '', type: '' };
 async function load() {
   const [r, m] = await Promise.all([
     fetch('./manifest.json?' + Date.now()).then(x => x.json()),
-    fetch('./missing.json?' + Date.now()).then(x => x.json()).catch(() => ({ items: [] })),
+    fetch('/api/missing?' + Date.now()).then(x => x.json()).catch(() => fetch('./missing.json').then(x => x.json())).catch(() => ({ items: [] })),
   ]);
   data = r; missing = m;
   updateTabVisibility();
@@ -272,7 +272,7 @@ function render() {
     if (!filtered.length) { g.innerHTML = `<div class="empty">Liste boş.</div>`; return; }
     g.innerHTML = filtered.map(i => {
       const preview = i.uploadedFile
-        ? `<div class="up-preview"><img src="./uploads/${i.uploadedFile}?t=${Date.now()}"><div class="up-name">${i.uploadedFile}</div></div>` : '';
+        ? `<div class="up-preview"><img src="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}?t=${Date.now()}"><div class="up-name">${i.uploadedFile}</div></div>` : '';
       const deny = i.status === 'denied' && i.denyReason ? `<div class="deny-reason"><b>Reddedildi:</b> ${escapeHtml(i.denyReason)}</div>` : '';
       const actions = [];
       const qn = JSON.stringify(i.name).replace(/"/g, '&quot;');
@@ -283,7 +283,7 @@ function render() {
         actions.push(`<button class="btn danger" onclick="reviewAction(${qn},'deny')">Reddet</button>`);
         actions.push(`<button class="btn" onclick="deleteUpload(${qn})">Sil</button>`);
       }
-      if (i.uploadedFile) actions.push(`<a class="btn" href="./uploads/${i.uploadedFile}" download="${i.uploadedFile}">İndir</a>`);
+      if (i.uploadedFile) actions.push(`<a class="btn" href="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}" download="${i.uploadedFile}">İndir</a>`);
       return `
       <div class="miss" id="miss-${cssEsc(i.name)}">
         <h3>${i.name}</h3>
