@@ -285,6 +285,14 @@ function render() {
         actions.push(`<button class="btn danger" onclick="reviewAction(${qn},'deny')">Reddet</button>`);
         actions.push(`<button class="btn" onclick="deleteUpload(${qn})">Sil</button>`);
       }
+      if (i.status === 'approved') {
+        actions.push(`<button class="btn danger" onclick="reviewAction(${qn},'deny')">Reddet</button>`);
+        actions.push(`<button class="btn" onclick="reviewAction(${qn},'reopen')">İncelemeye Al</button>`);
+      }
+      if (i.status === 'denied') {
+        actions.push(`<button class="btn primary" onclick="reviewAction(${qn},'approve')">Onayla</button>`);
+        actions.push(`<button class="btn" onclick="reviewAction(${qn},'reopen')">İncelemeye Al</button>`);
+      }
       if (i.uploadedFile) actions.push(`<a class="btn" href="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}" download="${i.uploadedFile}">İndir</a>`);
       return `
       <div class="miss" id="miss-${cssEsc(i.name)}">
@@ -390,7 +398,8 @@ async function reviewAction(name, action) {
   if (action === 'deny') {
     reason = prompt(`${name} — neden reddediyorsun?`);
     if (!reason) return;
-  } else if (!confirm(`${name} — onaylansın mı?`)) return;
+  } else if (action === 'approve' && !confirm(`${name} — onaylansın mı?`)) return;
+  else if (action === 'reopen' && !confirm(`${name} — incelemeye geri alınsın mı?`)) return;
   try {
     const r = await fetch('/api/review', {
       method: 'POST',
@@ -399,7 +408,7 @@ async function reviewAction(name, action) {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'review failed');
-    toast(action === 'approve' ? 'Onaylandı' : 'Reddedildi');
+    toast({ approve: 'Onaylandı', deny: 'Reddedildi', reopen: 'İncelemeye alındı' }[action]);
     setTimeout(load, 800);
   } catch (e) { toast(String(e.message), 'err'); }
 }

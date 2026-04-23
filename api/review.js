@@ -14,18 +14,18 @@ export default async function handler(req, res) {
     let body = req.body;
     if (typeof body === 'string') body = JSON.parse(body);
     const { name, action, reason } = body;
-    if (!name || !['approve', 'deny'].includes(action)) return res.status(400).json({ error: 'name + action (approve|deny) required' });
+    if (!name || !['approve', 'deny', 'reopen'].includes(action)) return res.status(400).json({ error: 'name + action (approve|deny|reopen) required' });
     if (action === 'deny' && !reason) return res.status(400).json({ error: 'reason required for deny' });
 
     const miss = await gh(token, missingJsonPath, { ref: branch, github: config.github });
     const json = JSON.parse(Buffer.from(miss.content, 'base64').toString());
     const item = json.items.find(i => i.name === name);
     if (!item) return res.status(404).json({ error: 'item not found' });
-    if (item.status !== 'waiting-for-review') return res.status(400).json({ error: 'only waiting-for-review items can be reviewed' });
+    if (!['waiting-for-review', 'approved', 'denied'].includes(item.status)) return res.status(400).json({ error: 'item must have an uploaded file to review' });
 
-    item.status = action === 'approve' ? 'approved' : 'denied';
+    item.status = action === 'approve' ? 'approved' : action === 'deny' ? 'denied' : 'waiting-for-review';
     if (action === 'deny') item.denyReason = reason;
-    if (action === 'approve') delete item.denyReason;
+    else delete item.denyReason;
     json.updated = new Date().toISOString().slice(0, 10);
 
     await gh(token, missingJsonPath, {
