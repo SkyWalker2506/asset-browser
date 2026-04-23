@@ -12,7 +12,23 @@ export default async function handler(req, res) {
 
   try {
     const meta = await gh(token, `${uploadPrefix}/${file}`, { ref: branch, github: config.github });
-    const buf = Buffer.from(meta.content, 'base64');
+    let buf;
+    if (meta.content) {
+      buf = Buffer.from(meta.content, 'base64');
+    } else {
+      // Large file: contents API returns empty content; fetch via blobs API
+      const blobUrl = `https://api.github.com/repos/${config.github.owner}/${config.github.repo}/git/blobs/${meta.sha}`;
+      const br = await fetch(blobUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+      if (!br.ok) throw new Error(`GitHub blob ${br.status}: ${await br.text()}`);
+      const bj = await br.json();
+      buf = Buffer.from(bj.content, 'base64');
+    }
     const ext = (file.split('.').pop() || '').toLowerCase();
     const mime = { png: 'image/png', webp: 'image/webp', gif: 'image/gif', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[ext] || 'application/octet-stream';
     res.setHeader('Content-Type', mime);

@@ -116,8 +116,10 @@
     linear-gradient(-45deg, transparent 75%, #1a1510 75%); background-color: #2a1f15;
     background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
     border:1px solid #5c4428; border-radius:4px; text-align:center; }
-  .up-preview img { max-width:100%; max-height:200px; object-fit:contain; cursor:zoom-in; }
-  .up-name { font-size:11px; color:#8b6b3d; margin-top:4px; word-break:break-all; }
+  .up-preview img { max-width:100%; max-height:280px; object-fit:contain; cursor:zoom-in; }
+  .up-info { margin-top:8px; }
+  .up-name { font-size:12px; color:#e8dcc0; word-break:break-all; font-weight:600; }
+  .up-meta { font-size:11px; color:#8b6b3d; margin-top:2px; }
   .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#2a1f15; color:#e8dcc0; padding:10px 18px; border-radius:6px; border:1px solid #d4a849; z-index:200; font-size:13px; opacity:0; transition:opacity .2s; }
   .toast.show { opacity:1; }
   .pri-P0 { background:#7a1f1f; color:#fff; }
@@ -272,7 +274,7 @@ function render() {
     if (!filtered.length) { g.innerHTML = `<div class="empty">Liste boş.</div>`; return; }
     g.innerHTML = filtered.map(i => {
       const preview = i.uploadedFile
-        ? `<div class="up-preview"><img src="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}?t=${Date.now()}"><div class="up-name">${i.uploadedFile}</div></div>` : '';
+        ? `<div class="up-preview"><img src="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}&t=${Date.now()}" onload="this.nextElementSibling.querySelector('.dim').textContent=this.naturalWidth+'x'+this.naturalHeight" onerror="this.style.display='none';this.parentElement.querySelector('.err').style.display='block'"><div class="up-info"><div class="up-name">${i.uploadedFile}</div><div class="up-meta"><span class="dim">—</span> · yüklendi</div><div class="err" style="display:none;color:#c94d4d;font-size:11px;">Preview yüklenemedi</div></div></div>` : '';
       const deny = i.status === 'denied' && i.denyReason ? `<div class="deny-reason"><b>Reddedildi:</b> ${escapeHtml(i.denyReason)}</div>` : '';
       const actions = [];
       const qn = JSON.stringify(i.name).replace(/"/g, '&quot;');
