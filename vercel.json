@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build-manifest && npm run build",
+  "buildCommand": "echo 'using prebuilt public/'",
   "outputDirectory": "public",
   "framework": null
 }
