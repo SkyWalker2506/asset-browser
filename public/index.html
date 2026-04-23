@@ -52,6 +52,13 @@
     display: flex; align-items: center; justify-content: center; padding: 8px;
   }
   .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: -webkit-optimize-contrast; }
+  .anim-frame {
+    width: 128px; height: 128px; background-repeat: no-repeat; background-size: auto 100%;
+    image-rendering: -webkit-optimize-contrast;
+  }
+  @keyframes sprite-play {
+    to { background-position-x: var(--end); }
+  }
   .info { padding: 8px 10px; font-size: 12px; }
   .info .n { color: #e8dcc0; font-weight: 600; word-break: break-word; }
   .info .d { color: #8b6b3d; font-size: 10px; margin-top: 2px; display: flex; justify-content: space-between; }
@@ -320,16 +327,33 @@ function render() {
     (!filter.type || i.type === filter.type)
   );
   if (!filtered.length) { g.innerHTML = '<div class="empty">Eşleşen asset yok.</div>'; return; }
-  g.innerHTML = filtered.map(i => `
+  g.innerHTML = filtered.map(i => {
+    let thumbInner = `<img loading="lazy" src="${i.src}" alt="${i.name}">`;
+    // Animation playback: if strip with N frames (dim like "WxH" where W = H*N)
+    if (i.type === 'Animasyon' && i.dim) {
+      const m = i.dim.match(/^(\d+)x(\d+)$/);
+      const nameFrames = (i.name.match(/_(\d+)f/i) || [])[1];
+      if (m) {
+        const w = +m[1], h = +m[2];
+        const frames = nameFrames ? +nameFrames : (w > h ? Math.round(w / h) : 1);
+        if (frames > 1 && w / h === frames) {
+          const endX = -((frames - 1) * 128);
+          const dur = (frames / 8).toFixed(2);
+          thumbInner = `<div class="anim-frame" style="background-image:url('${i.src}');--end:${endX}px;animation:sprite-play ${dur}s steps(${frames - 1}) infinite;"></div>`;
+        }
+      }
+    }
+    return `
     <div class="card">
-      <div class="thumb" onclick="openModal('${i.id}')"><img loading="lazy" src="${i.src}" alt="${i.name}"></div>
+      <div class="thumb" onclick="openModal('${i.id}')">${thumbInner}</div>
       <div class="info">
         <div class="n">${i.name}</div>
         <div class="d"><span>${i.dim || '—'}</span><span>${fmtSize(i.size)}</span></div>
         <span class="tag">${i.kind}</span> <span class="tag" style="background:${i.type==='Animasyon'?'#8b4d1e':'#3a2d1d'}">${i.type}</span>
         <a class="dl" href="${i.src}" download="${i.file}" onclick="event.stopPropagation()">İndir</a>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
