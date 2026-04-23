@@ -293,8 +293,9 @@ function render() {
         actions.push(`<button class="btn" onclick="deleteUpload(${qn})">Sil</button>`);
       }
       if (i.status === 'approved') {
+        actions.push(`<button class="btn primary" onclick="jumpToAsset(${qn})">Assete Git</button>`);
+        actions.push(`<button class="btn" onclick="clearEntry(${qn})">Temizle</button>`);
         actions.push(`<button class="btn danger" onclick="reviewAction(${qn},'deny')">Reddet</button>`);
-        actions.push(`<button class="btn" onclick="reviewAction(${qn},'reopen')">İncelemeye Al</button>`);
       }
       if (i.status === 'denied') {
         actions.push(`<button class="btn primary" onclick="reviewAction(${qn},'approve')">Onayla</button>`);
@@ -433,6 +434,28 @@ async function reviewAction(name, action) {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'review failed');
     toast({ approve: 'Onaylandı', deny: 'Reddedildi', reopen: 'İncelemeye alındı' }[action]);
+    setTimeout(load, 800);
+  } catch (e) { toast(String(e.message), 'err'); }
+}
+
+function jumpToAsset(name) {
+  document.querySelector('.tab[data-tab="have"]').click();
+  document.getElementById('q').value = name;
+  filter.q = name.toLowerCase();
+  render();
+}
+
+async function clearEntry(name) {
+  if (!confirm(`${name} — missing listesinden silinsin mi? (Asset dosyası Mevcut'ta kalır)`)) return;
+  try {
+    const r = await fetch('/api/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'clear failed');
+    toast('Temizlendi');
     setTimeout(load, 800);
   } catch (e) { toast(String(e.message), 'err'); }
 }
