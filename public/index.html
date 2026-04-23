@@ -176,6 +176,7 @@ async function load() {
     fetch('./missing.json?' + Date.now()).then(x => x.json()).catch(() => ({ items: [] })),
   ]);
   data = r; missing = m;
+  updateTabVisibility();
   updateMeta();
   buildChips();
   buildCatSelect();
@@ -193,6 +194,19 @@ function itemsForTab() {
   if (tab === 'have') return data.items;
   const fn = STATUS_FOR_TAB[tab];
   return missing.items.filter(i => fn(i.status));
+}
+
+function updateTabVisibility() {
+  for (const k of ['waiting', 'approved', 'denied']) {
+    const count = missing.items.filter(i => STATUS_FOR_TAB[k](i.status)).length;
+    const btn = document.querySelector(`.tab[data-tab="${k}"]`);
+    if (btn) btn.style.display = count ? '' : 'none';
+  }
+  // If current tab just got hidden, fall back to Mevcut
+  const activeBtn = document.querySelector('.tab.active');
+  if (activeBtn && activeBtn.style.display === 'none') {
+    document.querySelector('.tab[data-tab="have"]').click();
+  }
 }
 
 function updateMeta() {
