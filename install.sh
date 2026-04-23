@@ -19,6 +19,8 @@ cp -r "$PKG_ROOT/scripts/"*.mjs "$DEST/scripts/"
 cp "$PKG_ROOT/public/index.html" "$DEST/public/"
 cp "$PKG_ROOT/vercel.json" "$DEST/"
 cp "$PKG_ROOT/package.json" "$DEST/"
+cp "$PKG_ROOT/deploy.sh" "$DEST/"
+chmod +x "$DEST/deploy.sh"
 
 # Write config.json if not present
 if [ ! -f "$DEST/config.json" ]; then
