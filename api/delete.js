@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   const config = readConfig();
   const branch = config.github.branch || 'main';
   const uploadPrefix = config.uploadPath || 'asset-browser/data/uploads';
-  const missingJsonPath = `${uploadPrefix.split('/').slice(0, -2).join('/') || 'asset-browser/data'}/missing.json`;
+  const missingJsonPath = `${uploadPrefix.split('/').slice(0, -1).join('/') || 'asset-browser/data'}/missing.json`;
 
   try {
     let body = req.body;
