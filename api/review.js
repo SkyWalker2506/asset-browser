@@ -23,9 +23,28 @@ export default async function handler(req, res) {
     if (!item) return res.status(404).json({ error: 'item not found' });
     if (!['waiting-for-review', 'approved', 'denied'].includes(item.status)) return res.status(400).json({ error: 'item must have an uploaded file to review' });
 
+    const prevStatus = item.status;
     item.status = action === 'approve' ? 'approved' : action === 'deny' ? 'denied' : 'waiting-for-review';
     if (action === 'deny') item.denyReason = reason;
     else delete item.denyReason;
+
+    // If transitioning from approved → denied/reopen, remove runtime file from repo
+    if (prevStatus === 'approved' && action !== 'approve') {
+      const runtimeDir = (config.sources || []).find(s => /in.?game|runtime/i.test(s.category || ''))?.dir
+        || (config.sources || [])[0]?.dir;
+      if (runtimeDir) {
+        for (const ext of ['webp', 'png', 'gif', 'jpg']) {
+          const path = `${runtimeDir}/${item.name}.${ext}`;
+          try {
+            const meta = await gh(token, path, { ref: branch, github: config.github });
+            await gh(token, path, {
+              method: 'DELETE', github: config.github,
+              body: { message: `asset remove: ${item.name} (denied)`, sha: meta.sha, branch },
+            });
+          } catch {}
+        }
+      }
+    }
     json.updated = new Date().toISOString().slice(0, 10);
 
     await gh(token, missingJsonPath, {
