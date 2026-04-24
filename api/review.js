@@ -1,5 +1,6 @@
 // POST /api/review { name, action: 'approve'|'deny', reason? }
 import { readConfig, gh } from './_config.js';
+import { moveToTrash } from './_trash-util.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -35,13 +36,7 @@ export default async function handler(req, res) {
       if (runtimeDir) {
         for (const ext of ['webp', 'png', 'gif', 'jpg']) {
           const path = `${runtimeDir}/${item.name}.${ext}`;
-          try {
-            const meta = await gh(token, path, { ref: branch, github: config.github });
-            await gh(token, path, {
-              method: 'DELETE', github: config.github,
-              body: { message: `asset remove: ${item.name} (denied)`, sha: meta.sha, branch },
-            });
-          } catch {}
+          try { await moveToTrash(token, config, branch, path, runtimeDir, `review ${action}`); } catch {}
         }
       }
     }

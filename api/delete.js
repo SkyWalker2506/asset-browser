@@ -1,4 +1,5 @@
 import { readConfig, gh } from './_config.js';
+import { moveToTrash } from './_trash-util.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
@@ -21,25 +22,19 @@ export default async function handler(req, res) {
     if (!item) return res.status(404).json({ error: 'item not found' });
     if (!['waiting-for-review', 'denied', 'approved'].includes(item.status)) return res.status(400).json({ error: 'nothing to delete' });
 
-    // Remove upload file
+    // Move upload file to trash
     if (item.uploadedFile) {
       const filePath = `${uploadPrefix}/${item.uploadedFile}`;
-      try {
-        const meta = await gh(token, filePath, { ref: branch, github: config.github });
-        await gh(token, filePath, { method: 'DELETE', github: config.github, body: { message: `asset delete upload: ${name}`, sha: meta.sha, branch } });
-      } catch {}
+      try { await moveToTrash(token, config, branch, filePath, uploadPrefix, `delete ${item.status}`); } catch {}
     }
 
-    // Remove runtime asset file too
+    // Move runtime asset to trash too
     const runtimeDir = (config.sources || []).find(s => /in.?game|runtime/i.test(s.category || ''))?.dir
       || (config.sources || [])[0]?.dir;
     if (runtimeDir) {
       for (const ext of ['webp', 'png', 'gif', 'jpg']) {
         const rp = `${runtimeDir}/${item.name}.${ext}`;
-        try {
-          const meta = await gh(token, rp, { ref: branch, github: config.github });
-          await gh(token, rp, { method: 'DELETE', github: config.github, body: { message: `asset delete runtime: ${name}`, sha: meta.sha, branch } });
-        } catch {}
+        try { await moveToTrash(token, config, branch, rp, runtimeDir, `delete ${item.status}`); } catch {}
       }
     }
 

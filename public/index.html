@@ -151,6 +151,7 @@
     <button class="tab" data-tab="waiting">Bekleyen</button>
     <button class="tab" data-tab="approved">Onaylı</button>
     <button class="tab" data-tab="denied">Reddedilen</button>
+    <button class="tab" data-tab="trash" id="trash-tab" style="display:none;">Çöp</button>
   </div>
   <div class="controls">
     <input id="q" placeholder="Ara (isim)…">
@@ -176,15 +177,26 @@
 <script>
 let data = { items: [] };
 let missing = { items: [] };
+let config = null;
+let lastAction = null; // for undo
+
+function sourceDirFor(item) {
+  if (!config) return '';
+  const src = item.src || '';
+  const tag = src.split('/')[2];
+  const s = (config.sources || []).find(x => x.tag === tag);
+  return s ? s.dir : '';
+}
 let tab = 'have';
 let filter = { q: '', cat: '', ext: '', kind: '', type: '' };
 
 async function load() {
-  const [r, m] = await Promise.all([
+  const [r, m, c] = await Promise.all([
     fetch('./manifest.json?' + Date.now()).then(x => x.json()),
     fetch('/api/missing?' + Date.now()).then(x => x.json()).catch(() => fetch('./missing.json').then(x => x.json())).catch(() => ({ items: [] })),
+    fetch('./config.json').then(x => x.json()).catch(() => null),
   ]);
-  data = r; missing = m;
+  data = r; missing = m; config = c;
   updateTabVisibility();
   updateMeta();
   buildChips();
@@ -353,15 +365,29 @@ function render() {
         <div class="d"><span>${i.dim || '—'}</span><span>${fmtSize(i.size)}</span></div>
         <span class="tag">${i.kind}</span> <span class="tag" style="background:${i.type==='Animasyon'?'#8b4d1e':'#3a2d1d'}">${i.type}</span>
         <a class="dl" href="${i.src}" download="${i.file}" onclick="event.stopPropagation()">İndir</a>
+        <button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();deleteAsset(${JSON.stringify(i.file).replace(/"/g,'&quot;')},${JSON.stringify(sourceDirFor(i)).replace(/"/g,'&quot;')})">Sil</button>
       </div>
     </div>`;
   }).join('');
 }
 
+// show trash tab if admin token set
+if (localStorage.getItem('adminToken')) document.getElementById('trash-tab').style.display = '';
+// secret key combo to reveal trash: Ctrl+Shift+T
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    e.preventDefault();
+    const t = prompt('Admin token (boş bırakırsan çıkış):');
+    if (t) { localStorage.setItem('adminToken', t); document.getElementById('trash-tab').style.display = ''; toast('Admin mod aktif'); }
+    else { localStorage.removeItem('adminToken'); document.getElementById('trash-tab').style.display = 'none'; toast('Admin mod kapalı'); }
+  }
+});
+
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   tab = t.dataset.tab;
+  if (tab === 'trash') { loadTrash(); return; }
   const inMissing = tab !== 'have';
   document.querySelectorAll('.controls select').forEach(el => {
     el.style.display = (inMissing && el.id !== 'type') ? 'none' : '';
@@ -469,6 +495,115 @@ function tryAnimate(img, name) {
     holder.style.backgroundPosition = `-${col*dw}px -${row*dh}px`;
     i = (i + 1) % (cols * rows);
   }, 125);
+}
+
+async function deleteAsset(file, dir) {
+  if (!dir) return toast('Bu asset silinemez (dir yok)', 'err');
+  if (!confirm(`${file} silinsin mi? (çöp kutusuna taşınır)`)) return;
+  try {
+    const r = await fetch('/api/asset-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file, dir }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'delete failed');
+    lastAction = { type: 'asset-delete', file };
+    toast('Silindi (çöp kutusunda)');
+    showUndo();
+    setTimeout(load, 800);
+  } catch (e) { toast(String(e.message), 'err'); }
+}
+
+function showUndo() {
+  let el = document.getElementById('undo-btn');
+  if (!el) {
+    el = document.createElement('button');
+    el.id = 'undo-btn';
+    el.textContent = 'Geri Al';
+    el.style.cssText = 'position:fixed;bottom:64px;left:50%;transform:translateX(-50%);background:#d4a849;color:#1a1510;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:600;z-index:200;';
+    el.onclick = undoLastAction;
+    document.body.appendChild(el);
+  }
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 15000);
+}
+
+async function undoLastAction() {
+  if (!lastAction) return;
+  const token = localStorage.getItem('adminToken') || '';
+  if (lastAction.type === 'asset-delete') {
+    // restore via trash API
+    try {
+      const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+        body: JSON.stringify({ action: 'restore', file: lastAction.file }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'undo failed');
+      toast('Geri alındı');
+      lastAction = null;
+      document.getElementById('undo-btn').style.display = 'none';
+      setTimeout(load, 800);
+    } catch (e) { toast('Undo icin admin token gerekli: ' + e.message, 'err'); }
+  }
+}
+
+async function loadTrash() {
+  const token = localStorage.getItem('adminToken') || prompt('Admin token:');
+  if (!token) return;
+  localStorage.setItem('adminToken', token);
+  try {
+    const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
+      headers: { 'X-Admin-Token': token },
+    });
+    const j = await r.json();
+    if (!r.ok) { localStorage.removeItem('adminToken'); throw new Error(j.error); }
+    const g = document.getElementById('grid');
+    if (!j.files.length) { g.innerHTML = '<div class="empty">Çöp boş.</div>'; return; }
+    g.innerHTML = j.files.filter(f => !f.name.endsWith('.meta.json')).map(f => `
+      <div class="miss">
+        <h3>${f.name}</h3>
+        <div class="notes">${fmtSize(f.size)}</div>
+        <div class="actions">
+          <button class="btn primary" onclick="restoreTrash(${JSON.stringify(f.name).replace(/"/g,'&quot;')})">Geri Yükle</button>
+          <button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g,'&quot;')})">Tamamen Sil</button>
+        </div>
+      </div>`).join('');
+  } catch (e) { toast('Trash: ' + e.message, 'err'); }
+}
+
+async function restoreTrash(file) {
+  const token = localStorage.getItem('adminToken') || '';
+  try {
+    const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+      body: JSON.stringify({ action: 'restore', file }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    toast('Geri yüklendi');
+    setTimeout(loadTrash, 500);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function purgeTrash(file) {
+  if (!confirm(`${file} kalıcı silinsin mi? (geri alınamaz)`)) return;
+  const token = localStorage.getItem('adminToken') || '';
+  try {
+    const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+      body: JSON.stringify({ action: 'purge', file }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    toast('Kalıcı silindi');
+    setTimeout(loadTrash, 500);
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 function jumpToAsset(name) {
