@@ -151,7 +151,7 @@
     <button class="tab" data-tab="waiting">Bekleyen</button>
     <button class="tab" data-tab="approved">Onaylı</button>
     <button class="tab" data-tab="denied">Reddedilen</button>
-    <button class="tab" data-tab="trash" id="trash-tab">Çöp</button>
+    <button class="tab" data-tab="trash" id="trash-tab" style="display:none;">Çöp</button>
   </div>
   <div class="controls">
     <input id="q" placeholder="Ara (isim)…">
@@ -198,6 +198,11 @@ async function load() {
   ]);
   data = r; missing = m; config = c;
   updateTabVisibility();
+  // probe trash count (public endpoint)
+  fetch('/api/trash').then(x => x.json()).then(t => {
+    const count = (t.files || []).filter(f => !f.name.endsWith('.meta.json')).length;
+    document.getElementById('trash-tab').style.display = count ? '' : 'none';
+  }).catch(() => {});
   updateMeta();
   buildChips();
   buildCatSelect();
