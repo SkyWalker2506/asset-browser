@@ -293,7 +293,7 @@ function render() {
     if (!filtered.length) { g.innerHTML = `<div class="empty">Liste boş.</div>`; return; }
     g.innerHTML = filtered.map(i => {
       const preview = i.uploadedFile
-        ? `<div class="up-preview"><img src="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}&t=${Date.now()}" onload="tryAnimate(this, ${JSON.stringify(i.name).replace(/"/g,'&quot;')})" onerror="this.style.display='none';this.parentElement.querySelector('.err').style.display='block'"><div class="anim-holder"></div><div class="up-info"><div class="up-name">${i.uploadedFile}</div><div class="up-meta"><span class="dim">—</span> · yüklendi</div><div class="err" style="display:none;color:#c94d4d;font-size:11px;">Preview yüklenemedi</div></div></div>` : '';
+        ? `<div class="up-preview"><img src="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}&t=${Date.now()}" onload="this.nextElementSibling.querySelector('.dim').textContent=this.naturalWidth+'x'+this.naturalHeight" onerror="this.style.display='none';this.parentElement.querySelector('.err').style.display='block'"><div class="up-info"><div class="up-name">${i.uploadedFile}</div><div class="up-meta"><span class="dim">—</span> · ham yüklenmiş (işlenmemiş)</div><div class="err" style="display:none;color:#c94d4d;font-size:11px;">Preview yüklenemedi</div></div></div>` : '';
       const deny = i.status === 'denied' && i.denyReason ? `<div class="deny-reason"><b>Reddedildi:</b> ${escapeHtml(i.denyReason)}</div>` : '';
       const actions = [];
       const qn = JSON.stringify(i.name).replace(/"/g, '&quot;');
