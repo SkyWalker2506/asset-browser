@@ -29,6 +29,36 @@ export default async function handler(req, res) {
     if (action === 'deny') item.denyReason = reason;
     else delete item.denyReason;
 
+    // On approve: copy uploaded file to runtime dir (as-is, no split)
+    if (action === 'approve' && item.uploadedFile) {
+      const runtimeDir = (config.sources || []).find(s => /in.?game|runtime/i.test(s.category || ''))?.dir
+        || (config.sources || [])[0]?.dir;
+      if (runtimeDir) {
+        const ext = (item.uploadedFile.split('.').pop() || 'png').toLowerCase();
+        const runtimePath = `${runtimeDir}/${item.name}.${ext}`;
+        try {
+          // fetch upload content
+          const uploadPath = `${uploadPrefix}/${item.uploadedFile}`;
+          const up = await gh(token, uploadPath, { ref: branch, github: config.github });
+          let content = up.content;
+          if (!content) {
+            const blob = await fetch(`https://api.github.com/repos/${config.github.owner}/${config.github.repo}/git/blobs/${up.sha}`, {
+              headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' },
+            }).then(r => r.json());
+            content = blob.content;
+          }
+          let existingSha;
+          try { existingSha = (await gh(token, runtimePath, { ref: branch, github: config.github })).sha; } catch {}
+          await gh(token, runtimePath, {
+            method: 'PUT', github: config.github,
+            body: { message: `approve: copy ${item.name} to runtime`, content, branch, ...(existingSha ? { sha: existingSha } : {}) },
+          });
+        } catch (e) {
+          console.warn('runtime copy failed:', e.message);
+        }
+      }
+    }
+
     // If transitioning from approved → denied/reopen, remove runtime file from repo
     if (prevStatus === 'approved' && action !== 'approve') {
       const runtimeDir = (config.sources || []).find(s => /in.?game|runtime/i.test(s.category || ''))?.dir
