@@ -149,7 +149,6 @@
     <button class="tab active" data-tab="have">Mevcut</button>
     <button class="tab" data-tab="todo">Eksik</button>
     <button class="tab" data-tab="waiting">Bekleyen</button>
-    <button class="tab" data-tab="approved">Onaylı</button>
     <button class="tab" data-tab="denied">Reddedilen</button>
     <button class="tab" data-tab="trash" id="trash-tab" style="display:none;">Çöp</button>
   </div>
@@ -212,18 +211,40 @@ async function load() {
 const STATUS_FOR_TAB = {
   todo: s => s === 'todo' || s === 'in-progress',
   waiting: s => s === 'waiting-for-review',
-  approved: s => s === 'approved',
   denied: s => s === 'denied',
 };
 
+// Build synthetic manifest entries for approved items so they show up in "Mevcut"
+function approvedAsAssets() {
+  return missing.items.filter(i => i.status === 'approved' && i.uploadedFile).map(i => ({
+    id: `approved-${i.name}`,
+    name: i.name,
+    file: i.uploadedFile,
+    ext: (i.uploadedFile.split('.').pop() || 'png').toLowerCase(),
+    src: `/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}`,
+    category: i.category || 'Approved',
+    kind: i.kind || 'Other',
+    type: i.type || 'Resim',
+    size: 0,
+    dim: '',
+    mtime: new Date().toISOString(),
+    _approved: true,
+  }));
+}
+
 function itemsForTab() {
-  if (tab === 'have') return data.items;
+  if (tab === 'have') {
+    // Merge approved (non-manifest) items; dedupe by name — prefer real manifest entry
+    const existing = new Set(data.items.map(i => i.name));
+    const extras = approvedAsAssets().filter(a => !existing.has(a.name));
+    return [...data.items, ...extras];
+  }
   const fn = STATUS_FOR_TAB[tab];
   return missing.items.filter(i => fn(i.status));
 }
 
 function updateTabVisibility() {
-  for (const k of ['waiting', 'approved', 'denied']) {
+  for (const k of ['waiting', 'denied']) {
     const count = missing.items.filter(i => STATUS_FOR_TAB[k](i.status)).length;
     const btn = document.querySelector(`.tab[data-tab="${k}"]`);
     if (btn) btn.style.display = count ? '' : 'none';
@@ -338,7 +359,8 @@ function render() {
     }).join('');
     return;
   }
-  const filtered = data.items.filter(i =>
+  const haveItems = itemsForTab();
+  const filtered = haveItems.filter(i =>
     (!q || i.name.toLowerCase().includes(q)) &&
     (!filter.cat || i.category === filter.cat) &&
     (!filter.ext || i.ext === filter.ext) &&
@@ -362,18 +384,39 @@ function render() {
         }
       }
     }
+    const approvedBadge = i._approved ? `<span class="tag st-approved">Onaylı</span> ` : '';
+    const delBtn = i._approved
+      ? `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();unapproveAsset(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Sil (Eksikler'e gönder)</button>`
+      : `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();deleteAsset(${JSON.stringify(i.file).replace(/"/g,'&quot;')},${JSON.stringify(sourceDirFor(i)).replace(/"/g,'&quot;')})">Sil</button>`;
     return `
-    <div class="card">
+    <div class="card" id="asset-${cssEsc(i.name)}">
       <div class="thumb" onclick="openModal('${i.id}')">${thumbInner}</div>
       <div class="info">
         <div class="n">${i.name}</div>
         <div class="d"><span>${i.dim || '—'}</span><span>${fmtSize(i.size)}</span></div>
-        <span class="tag">${i.kind}</span> <span class="tag" style="background:${i.type==='Animasyon'?'#8b4d1e':'#3a2d1d'}">${i.type}</span>
+        ${approvedBadge}<span class="tag">${i.kind}</span> <span class="tag" style="background:${i.type==='Animasyon'?'#8b4d1e':'#3a2d1d'}">${i.type}</span>
         <a class="dl" href="${i.src}" download="${i.file}" onclick="event.stopPropagation()">İndir</a>
-        <button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();deleteAsset(${JSON.stringify(i.file).replace(/"/g,'&quot;')},${JSON.stringify(sourceDirFor(i)).replace(/"/g,'&quot;')})">Sil</button>
+        ${delBtn}
       </div>
     </div>`;
   }).join('');
+}
+
+async function unapproveAsset(name) {
+  if (!confirm(`${name} — silinsin mi? Eksikler listesine geri dönecek.`)) return;
+  try {
+    const r = await fetch('/api/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'delete failed');
+    const prev = missing.items.find(i => i.name === name);
+    if (prev?.uploadedFile) recordAction({ type: 'upload-delete', file: prev.uploadedFile, itemName: prev.name, prevStatus: prev.status, prevDenyReason: prev.denyReason, label: 'silme' });
+    toast('Eksikler\'e gönderildi');
+    setTimeout(load, 800);
+  } catch (e) { toast(String(e.message), 'err'); }
 }
 
 // Ctrl+Shift+T → toggle admin mode (for purge capability)
@@ -654,9 +697,20 @@ async function purgeTrash(file) {
 
 function jumpToAsset(name) {
   document.querySelector('.tab[data-tab="have"]').click();
-  document.getElementById('q').value = name;
-  filter.q = name.toLowerCase();
+  document.getElementById('q').value = '';
+  filter.q = '';
   render();
+  requestAnimationFrame(() => {
+    const el = document.getElementById('asset-' + cssEsc(name));
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.transition = 'box-shadow .4s';
+      el.style.boxShadow = '0 0 0 3px #d4a849';
+      setTimeout(() => { el.style.boxShadow = ''; }, 2000);
+    } else {
+      toast('Asset listede bulunamadı — manifest yenilenmemiş olabilir', 'err');
+    }
+  });
 }
 
 async function clearEntry(name) {
@@ -692,13 +746,14 @@ async function deleteUpload(name) {
 }
 
 function fmtSize(b) {
+  if (!b) return '—';
   if (b < 1024) return b + 'B';
   if (b < 1024 * 1024) return (b / 1024).toFixed(1) + 'KB';
   return (b / 1024 / 1024).toFixed(2) + 'MB';
 }
 
 function openModal(id) {
-  const i = data.items.find(x => x.id === id);
+  const i = data.items.find(x => x.id === id) || approvedAsAssets().find(x => x.id === id);
   if (!i) return;
   let previewInner = `<img src="${i.src}">`;
   if (i.type === 'Animasyon' && i.dim) {
