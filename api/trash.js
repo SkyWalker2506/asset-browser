@@ -13,7 +13,12 @@ function isAdmin(req) {
 export default async function handler(req, res) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return res.status(500).json({ error: 'GITHUB_TOKEN env var not set' });
-  if (!isAdmin(req)) return res.status(403).json({ error: 'admin only' });
+  // GET (list) and POST purge require admin. POST restore is public (within 5 min of deletedAt).
+  const method = req.method;
+  let body = req.body;
+  if (typeof body === 'string') try { body = JSON.parse(body); } catch { body = {}; }
+  const isRestore = method === 'POST' && body?.action === 'restore';
+  if (!isRestore && !isAdmin(req)) return res.status(403).json({ error: 'admin only' });
 
   const config = readConfig();
   const branch = config.github.branch || 'main';
@@ -37,8 +42,6 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      let body = req.body;
-      if (typeof body === 'string') body = JSON.parse(body);
       const { action, file } = body;
       if (!file) return res.status(400).json({ error: 'file required' });
 
@@ -52,14 +55,19 @@ export default async function handler(req, res) {
       if (action === 'restore') {
         // Read meta json to know where it came from
         const metaPath = `${trashDir}/${file.replace(/\.[^.]+$/, '')}.meta.json`;
-        let originDir;
+        let originDir, deletedAt;
         try {
           const mr = await gh(token, metaPath, { ref: branch, github: config.github });
           const metaObj = JSON.parse(Buffer.from(mr.content, 'base64').toString());
           originDir = metaObj.originDir;
+          deletedAt = metaObj.deletedAt;
         } catch {
-          // Fallback: first config source
           originDir = (config.sources || [])[0]?.dir;
+        }
+        // Public restore limited to 5 min after delete; admin can always restore
+        if (!isAdmin(req)) {
+          const ageMs = deletedAt ? Date.now() - new Date(deletedAt).getTime() : Infinity;
+          if (ageMs > 5 * 60 * 1000) return res.status(403).json({ error: 'public restore süresi (5dk) geçti, admin gerekli' });
         }
         if (!originDir) return res.status(400).json({ error: 'origin unknown' });
 
