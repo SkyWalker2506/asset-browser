@@ -558,6 +558,13 @@ async function undoLastAction() {
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error);
+      // For upload-delete: also restore missing.json status + uploadedFile
+      if (a.type === 'upload-delete' && a.itemName) {
+        await fetch('/api/missing-patch', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: a.itemName, patch: { status: a.prevStatus || 'waiting-for-review', uploadedFile: a.file, denyReason: a.prevDenyReason || null } }),
+        });
+      }
     } else if (a.type === 'review') {
       // Revert to prev status
       const prev = a.prevStatus;
@@ -673,7 +680,7 @@ async function deleteUpload(name) {
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'delete failed');
     const prev = missing.items.find(i => i.name === name);
-    if (prev?.uploadedFile) recordAction({ type: 'upload-delete', file: prev.uploadedFile, label: 'silme' });
+    if (prev?.uploadedFile) recordAction({ type: 'upload-delete', file: prev.uploadedFile, itemName: prev.name, prevStatus: prev.status, prevDenyReason: prev.denyReason, label: 'silme' });
     toast('Silindi');
     setTimeout(load, 800);
   } catch (e) { toast(String(e.message), 'err'); }
