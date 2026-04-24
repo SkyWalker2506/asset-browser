@@ -19,14 +19,28 @@ export default async function handler(req, res) {
     const json = JSON.parse(Buffer.from(miss.content, 'base64').toString());
     const item = json.items.find(i => i.name === name);
     if (!item) return res.status(404).json({ error: 'item not found' });
-    if (item.status !== 'waiting-for-review') return res.status(400).json({ error: 'only waiting-for-review items can be deleted' });
+    if (!['waiting-for-review', 'denied', 'approved'].includes(item.status)) return res.status(400).json({ error: 'nothing to delete' });
 
+    // Remove upload file
     if (item.uploadedFile) {
       const filePath = `${uploadPrefix}/${item.uploadedFile}`;
       try {
         const meta = await gh(token, filePath, { ref: branch, github: config.github });
-        await gh(token, filePath, { method: 'DELETE', github: config.github, body: { message: `asset delete: ${name}`, sha: meta.sha, branch } });
+        await gh(token, filePath, { method: 'DELETE', github: config.github, body: { message: `asset delete upload: ${name}`, sha: meta.sha, branch } });
       } catch {}
+    }
+
+    // Remove runtime asset file too
+    const runtimeDir = (config.sources || []).find(s => /in.?game|runtime/i.test(s.category || ''))?.dir
+      || (config.sources || [])[0]?.dir;
+    if (runtimeDir) {
+      for (const ext of ['webp', 'png', 'gif', 'jpg']) {
+        const rp = `${runtimeDir}/${item.name}.${ext}`;
+        try {
+          const meta = await gh(token, rp, { ref: branch, github: config.github });
+          await gh(token, rp, { method: 'DELETE', github: config.github, body: { message: `asset delete runtime: ${name}`, sha: meta.sha, branch } });
+        } catch {}
+      }
     }
 
     item.status = 'todo';

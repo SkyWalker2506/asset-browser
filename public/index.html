@@ -300,6 +300,7 @@ function render() {
       if (i.status === 'denied') {
         actions.push(`<button class="btn primary" onclick="reviewAction(${qn},'approve')">Onayla</button>`);
         actions.push(`<button class="btn" onclick="reviewAction(${qn},'reopen')">İncelemeye Al</button>`);
+        actions.push(`<button class="btn danger" onclick="deleteUpload(${qn})">Sil</button>`);
       }
       if (i.uploadedFile) actions.push(`<a class="btn" href="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}" download="${i.uploadedFile}">İndir</a>`);
       return `
