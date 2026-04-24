@@ -452,6 +452,8 @@ async function reviewAction(name, action) {
     if (!reason) return;
   } else if (action === 'approve' && !confirm(`${name} — onaylansın mı?`)) return;
   else if (action === 'reopen' && !confirm(`${name} — incelemeye geri alınsın mı?`)) return;
+  const prev = missing.items.find(i => i.name === name);
+  const prevStatus = prev?.status, prevDenyReason = prev?.denyReason;
   try {
     const r = await fetch('/api/review', {
       method: 'POST',
@@ -460,6 +462,7 @@ async function reviewAction(name, action) {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'review failed');
+    recordAction({ type: 'review', name, prevStatus, prevDenyReason, label: action === 'approve' ? 'onay' : action === 'deny' ? 'red' : 'incele' });
     toast({ approve: 'Onaylandı', deny: 'Reddedildi', reopen: 'İncelemeye alındı' }[action]);
     setTimeout(load, 800);
   } catch (e) { toast(String(e.message), 'err'); }
@@ -508,47 +511,81 @@ async function deleteAsset(file, dir) {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'delete failed');
-    lastAction = { type: 'asset-delete', file };
+    recordAction({ type: 'asset-delete', file, label: 'silme' });
     toast('Silindi (çöp kutusunda)');
-    showUndo();
     setTimeout(load, 800);
   } catch (e) { toast(String(e.message), 'err'); }
 }
 
-function showUndo() {
+function recordAction(action) {
+  lastAction = { ...action, at: Date.now() };
+  updateUndoButton();
+}
+
+function updateUndoButton() {
   let el = document.getElementById('undo-btn');
   if (!el) {
     el = document.createElement('button');
     el.id = 'undo-btn';
-    el.textContent = 'Geri Al';
-    el.style.cssText = 'position:fixed;bottom:64px;left:50%;transform:translateX(-50%);background:#d4a849;color:#1a1510;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:600;z-index:200;';
+    el.style.cssText = 'position:fixed;bottom:16px;right:16px;background:#d4a849;color:#1a1510;border:none;padding:10px 18px;border-radius:6px;cursor:pointer;font-weight:600;z-index:200;transition:opacity .2s;box-shadow:0 2px 8px rgba(0,0,0,.4);';
     el.onclick = undoLastAction;
     document.body.appendChild(el);
   }
-  el.style.display = 'block';
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.display = 'none'; }, 15000);
+  const valid = lastAction && (Date.now() - lastAction.at) < 15000;
+  if (valid) {
+    el.textContent = `⟲ Geri Al (${lastAction.label})`;
+    el.style.opacity = '1';
+    el.style.cursor = 'pointer';
+    el.disabled = false;
+  } else {
+    el.textContent = '⟲ Geri Al';
+    el.style.opacity = '0.4';
+    el.style.cursor = 'not-allowed';
+    el.disabled = true;
+  }
 }
 
+setInterval(updateUndoButton, 1000);
+
 async function undoLastAction() {
-  if (!lastAction) return;
+  if (!lastAction || (Date.now() - lastAction.at) > 15000) return;
+  const a = lastAction;
   const token = localStorage.getItem('adminToken') || '';
-  if (lastAction.type === 'asset-delete') {
-    // restore via trash API
-    try {
+  try {
+    if (a.type === 'asset-delete' || a.type === 'upload-delete') {
       const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
-        body: JSON.stringify({ action: 'restore', file: lastAction.file }),
+        body: JSON.stringify({ action: 'restore', file: a.file }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'undo failed');
-      toast('Geri alındı');
-      lastAction = null;
-      document.getElementById('undo-btn').style.display = 'none';
-      setTimeout(load, 800);
-    } catch (e) { toast('Undo icin admin token gerekli: ' + e.message, 'err'); }
-  }
+      if (!r.ok) throw new Error(j.error || 'admin token gerekli');
+    } else if (a.type === 'review') {
+      // Revert to prev status
+      const prev = a.prevStatus;
+      let action;
+      if (prev === 'waiting-for-review') action = 'reopen';
+      else if (prev === 'approved') action = 'approve';
+      else if (prev === 'denied') action = 'deny';
+      else throw new Error('prev status revert not supported: ' + prev);
+      const body = { name: a.name, action };
+      if (action === 'deny') body.reason = a.prevDenyReason || 'restored by undo';
+      const r = await fetch('/api/review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error);
+    } else if (a.type === 'clear') {
+      throw new Error('Clear geri alınamaz — missing listesinden kalıcı silindi');
+    } else {
+      throw new Error('bilinmeyen action: ' + a.type);
+    }
+    toast('Geri alındı');
+    lastAction = null;
+    updateUndoButton();
+    setTimeout(load, 800);
+  } catch (e) { toast('Undo: ' + e.message, 'err'); }
 }
 
 async function loadTrash() {
@@ -638,6 +675,8 @@ async function deleteUpload(name) {
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || 'delete failed');
+    const prev = missing.items.find(i => i.name === name);
+    if (prev?.uploadedFile) recordAction({ type: 'upload-delete', file: prev.uploadedFile, label: 'silme' });
     toast('Silindi');
     setTimeout(load, 800);
   } catch (e) { toast(String(e.message), 'err'); }
