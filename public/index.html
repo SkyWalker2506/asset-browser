@@ -151,7 +151,7 @@
     <button class="tab" data-tab="waiting">Bekleyen</button>
     <button class="tab" data-tab="approved">Onaylı</button>
     <button class="tab" data-tab="denied">Reddedilen</button>
-    <button class="tab" data-tab="trash" id="trash-tab" style="display:none;">Çöp</button>
+    <button class="tab" data-tab="trash" id="trash-tab">Çöp</button>
   </div>
   <div class="controls">
     <input id="q" placeholder="Ara (isim)…">
@@ -371,9 +371,7 @@ function render() {
   }).join('');
 }
 
-// show trash tab if admin token set
-if (localStorage.getItem('adminToken')) document.getElementById('trash-tab').style.display = '';
-// secret key combo to reveal trash: Ctrl+Shift+T
+// Ctrl+Shift+T → toggle admin mode (for purge capability)
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'T') {
     e.preventDefault();
@@ -553,13 +551,13 @@ async function undoLastAction() {
   const token = localStorage.getItem('adminToken') || '';
   try {
     if (a.type === 'asset-delete' || a.type === 'upload-delete') {
-      const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
+      const r = await fetch('/api/trash', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'restore', file: a.file }),
       });
       const j = await r.json();
-      if (!r.ok) throw new Error(j.error || 'admin token gerekli');
+      if (!r.ok) throw new Error(j.error);
     } else if (a.type === 'review') {
       // Revert to prev status
       const prev = a.prevStatus;
@@ -589,35 +587,34 @@ async function undoLastAction() {
 }
 
 async function loadTrash() {
-  const token = localStorage.getItem('adminToken') || prompt('Admin token:');
-  if (!token) return;
-  localStorage.setItem('adminToken', token);
+  const token = localStorage.getItem('adminToken') || '';
+  const isAdmin = !!token;
   try {
-    const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
-      headers: { 'X-Admin-Token': token },
+    const r = await fetch('/api/trash' + (token ? '?admin=' + encodeURIComponent(token) : ''), {
+      headers: token ? { 'X-Admin-Token': token } : {},
     });
     const j = await r.json();
-    if (!r.ok) { localStorage.removeItem('adminToken'); throw new Error(j.error); }
+    if (!r.ok) throw new Error(j.error);
     const g = document.getElementById('grid');
-    if (!j.files.length) { g.innerHTML = '<div class="empty">Çöp boş.</div>'; return; }
-    g.innerHTML = j.files.filter(f => !f.name.endsWith('.meta.json')).map(f => `
+    const visibleFiles = j.files.filter(f => !f.name.endsWith('.meta.json'));
+    if (!visibleFiles.length) { g.innerHTML = '<div class="empty">Çöp boş.</div>'; return; }
+    g.innerHTML = visibleFiles.map(f => `
       <div class="miss">
         <h3>${f.name}</h3>
         <div class="notes">${fmtSize(f.size)}</div>
         <div class="actions">
           <button class="btn primary" onclick="restoreTrash(${JSON.stringify(f.name).replace(/"/g,'&quot;')})">Geri Yükle</button>
-          <button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g,'&quot;')})">Tamamen Sil</button>
+          ${isAdmin ? `<button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g,'&quot;')})">Kalıcı Sil</button>` : ''}
         </div>
       </div>`).join('');
   } catch (e) { toast('Trash: ' + e.message, 'err'); }
 }
 
 async function restoreTrash(file) {
-  const token = localStorage.getItem('adminToken') || '';
   try {
-    const r = await fetch('/api/trash?admin=' + encodeURIComponent(token), {
+    const r = await fetch('/api/trash', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'restore', file }),
     });
     const j = await r.json();

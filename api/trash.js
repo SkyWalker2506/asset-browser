@@ -13,12 +13,11 @@ function isAdmin(req) {
 export default async function handler(req, res) {
   const token = process.env.GITHUB_TOKEN;
   if (!token) return res.status(500).json({ error: 'GITHUB_TOKEN env var not set' });
-  // GET (list) and POST purge require admin. POST restore is public (within 5 min of deletedAt).
-  const method = req.method;
+  // GET (list) + POST restore are public. POST purge is admin-only.
   let body = req.body;
   if (typeof body === 'string') try { body = JSON.parse(body); } catch { body = {}; }
-  const isRestore = method === 'POST' && body?.action === 'restore';
-  if (!isRestore && !isAdmin(req)) return res.status(403).json({ error: 'admin only' });
+  const isPurge = req.method === 'POST' && body?.action === 'purge';
+  if (isPurge && !isAdmin(req)) return res.status(403).json({ error: 'purge admin only' });
 
   const config = readConfig();
   const branch = config.github.branch || 'main';
@@ -64,11 +63,7 @@ export default async function handler(req, res) {
         } catch {
           originDir = (config.sources || [])[0]?.dir;
         }
-        // Public restore limited to 5 min after delete; admin can always restore
-        if (!isAdmin(req)) {
-          const ageMs = deletedAt ? Date.now() - new Date(deletedAt).getTime() : Infinity;
-          if (ageMs > 5 * 60 * 1000) return res.status(403).json({ error: 'public restore süresi (5dk) geçti, admin gerekli' });
-        }
+        // Restore is public — no time limit
         if (!originDir) return res.status(400).json({ error: 'origin unknown' });
 
         // Read trash file content
