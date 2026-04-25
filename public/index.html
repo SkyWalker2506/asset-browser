@@ -142,6 +142,58 @@
   .card[data-pending] .thumb { background-color:#1a1510; }
   .card[data-pending] .thumb img { opacity:0; }
   .card .thumb img { opacity:1; transition:opacity .2s; }
+  /* Selection state */
+  .card.selected, .miss.selected { outline:3px solid #d4a849; outline-offset:-1px; }
+  .card.focused, .miss.focused { box-shadow:0 0 0 2px #c9b889; }
+  .select-checkbox {
+    position:absolute; top:6px; left:6px; width:22px; height:22px;
+    background:rgba(15,11,7,.85); border:2px solid #5c4428; border-radius:4px;
+    cursor:pointer; display:none; align-items:center; justify-content:center;
+    font-size:14px; color:transparent; user-select:none; transition:all .12s;
+  }
+  .card { position:relative; }
+  .miss { position:relative; }
+  .card:hover .select-checkbox, .miss:hover .select-checkbox,
+  body.has-selection .select-checkbox { display:flex; }
+  .card.selected .select-checkbox, .miss.selected .select-checkbox {
+    background:#d4a849; color:#1a1510; border-color:#d4a849;
+  }
+  .card.selected .select-checkbox::after, .miss.selected .select-checkbox::after { content:'✓'; }
+  /* Bulk action bar */
+  .bulk-bar {
+    position:fixed; bottom:0; left:0; right:0; z-index:150;
+    background:#2a1f15; border-top:2px solid #d4a849; padding:12px 24px;
+    display:none; align-items:center; gap:12px; box-shadow:0 -4px 16px rgba(0,0,0,.5);
+  }
+  body.has-selection .bulk-bar { display:flex; }
+  .bulk-bar .count { font-weight:600; color:#d4a849; font-size:14px; min-width:120px; }
+  .bulk-bar button {
+    padding:8px 14px; border-radius:4px; border:1px solid #5c4428;
+    background:#0f0b07; color:#e8dcc0; cursor:pointer; font-size:13px; font-weight:600;
+  }
+  .bulk-bar button:hover { border-color:#d4a849; }
+  .bulk-bar button.danger { background:#4d1f1f; border-color:#7a1f1f; }
+  .bulk-bar button.danger:hover { background:#7a1f1f; }
+  .bulk-bar .spacer { flex:1; }
+  /* Help overlay */
+  .help-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.85); display:none;
+    align-items:center; justify-content:center; z-index:300; padding:24px;
+  }
+  .help-overlay.open { display:flex; }
+  .help-overlay .panel {
+    background:#1a1510; border:2px solid #d4a849; border-radius:8px;
+    padding:24px 32px; max-width:560px; max-height:80vh; overflow:auto;
+  }
+  .help-overlay h2 { color:#d4a849; margin:0 0 16px; }
+  .help-overlay table { border-collapse:collapse; width:100%; }
+  .help-overlay td { padding:6px 12px; border-bottom:1px solid #3a2d1d; font-size:13px; }
+  .help-overlay td:first-child { color:#d4a849; font-family:ui-monospace,Menlo,monospace; white-space:nowrap; }
+  .help-overlay td:last-child { color:#c9b889; }
+  @media (prefers-reduced-motion: reduce) {
+    .anim-frame { animation: none !important; }
+    * { transition: none !important; }
+  }
   .pri-P0 { background:#7a1f1f; color:#fff; }
   .pri-P1 { background:#7a4a1f; color:#fff; }
   .pri-P2 { background:#3a2d1d; color:#c9b889; }
@@ -187,6 +239,38 @@
   <button class="close" onclick="closeModal()">×</button>
   <div class="box" id="box"></div>
 </div>
+<div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Çoklu seçim eylemleri">
+  <span class="count" id="bulk-count">0 seçili</span>
+  <button id="bulk-action-delete" class="danger" type="button">Sil</button>
+  <button id="bulk-action-restore" type="button" style="display:none;">Geri Yükle</button>
+  <button id="bulk-action-clear" type="button" style="display:none;">Temizle</button>
+  <span class="spacer"></span>
+  <button id="bulk-action-cancel" type="button">Vazgeç (Esc)</button>
+</div>
+<div class="help-overlay" id="help-overlay" onclick="if(event.target===this)closeHelp()" role="dialog" aria-label="Klavye kısayolları">
+  <div class="panel">
+    <h2>Klavye Kısayolları</h2>
+    <table>
+      <tr><td>/</td><td>Aramaya odaklan</td></tr>
+      <tr><td>Esc</td><td>Modal kapat / seçimi temizle / aramayı sıfırla</td></tr>
+      <tr><td>?</td><td>Bu yardımı aç/kapat</td></tr>
+      <tr><td>g h</td><td>Mevcut sekmesi</td></tr>
+      <tr><td>g t</td><td>Eksik sekmesi</td></tr>
+      <tr><td>g w</td><td>Bekleyen sekmesi</td></tr>
+      <tr><td>g d</td><td>Reddedilen sekmesi</td></tr>
+      <tr><td>j / k</td><td>Sonraki / önceki kart</td></tr>
+      <tr><td>Enter</td><td>Odaklı kartı aç</td></tr>
+      <tr><td>x</td><td>Odaklı kartı seç/seçimden çıkar</td></tr>
+      <tr><td>Shift+Click</td><td>Aralık seç</td></tr>
+      <tr><td>Ctrl/Cmd+A</td><td>Tümünü seç (görünür)</td></tr>
+      <tr><td>d d</td><td>Seçilenleri sil</td></tr>
+      <tr><td>Ctrl+Shift+T</td><td>Admin modu aç/kapat</td></tr>
+    </table>
+    <div style="margin-top:14px;text-align:right;">
+      <button onclick="closeHelp()" style="padding:8px 16px;background:#5c4428;color:#e8dcc0;border:none;border-radius:4px;cursor:pointer;">Tamam</button>
+    </div>
+  </div>
+</div>
 <script>
 let data = { items: [] };
 let missing = { items: [] };
@@ -220,6 +304,189 @@ function refreshAdminBadge() {
   if (!badge) return;
   badge.classList.toggle('on', !!getAdminToken());
 }
+
+// --- Selection state for bulk operations.
+const selection = new Set();
+let lastSelectedKey = null; // for shift-click range
+let focusedKey = null;      // keyboard navigation cursor
+
+function selectionKey(el) {
+  // .card uses asset name (id="asset-..."), .miss uses missing item name (id="miss-...").
+  const id = el.id || '';
+  if (id.startsWith('asset-') || id.startsWith('miss-')) return id;
+  return null;
+}
+
+function refreshSelectionUI() {
+  document.body.classList.toggle('has-selection', selection.size > 0);
+  document.getElementById('bulk-count').textContent = `${selection.size} seçili`;
+  // Tab-specific bulk actions visibility
+  const inTrash = tab === 'trash';
+  document.getElementById('bulk-action-restore').style.display = inTrash ? '' : 'none';
+  document.getElementById('bulk-action-delete').style.display = inTrash ? 'none' : '';
+  document.getElementById('bulk-action-clear').style.display = (tab === 'have') ? '' : 'none';
+  // Sync DOM .selected class
+  document.querySelectorAll('.card, .miss').forEach(el => {
+    const k = selectionKey(el);
+    el.classList.toggle('selected', !!k && selection.has(k));
+  });
+}
+
+function clearSelection() {
+  selection.clear();
+  lastSelectedKey = null;
+  refreshSelectionUI();
+}
+
+function toggleSelection(el, opts = {}) {
+  const k = selectionKey(el); if (!k) return;
+  if (opts.shift && lastSelectedKey) {
+    // Range select between lastSelectedKey and k.
+    const all = Array.from(document.querySelectorAll('.card, .miss')).map(selectionKey).filter(Boolean);
+    const a = all.indexOf(lastSelectedKey), b = all.indexOf(k);
+    if (a >= 0 && b >= 0) {
+      const [from, to] = a < b ? [a, b] : [b, a];
+      for (let i = from; i <= to; i++) selection.add(all[i]);
+    }
+  } else {
+    if (selection.has(k)) selection.delete(k); else selection.add(k);
+    lastSelectedKey = k;
+  }
+  refreshSelectionUI();
+}
+
+function selectionItems() {
+  // Resolve selection keys back to actionable item objects.
+  return Array.from(selection).map(k => {
+    if (k.startsWith('asset-')) {
+      const name = k.slice(6).replace(/_/g, ''); // best effort — find by id match
+      // Find by exact rendered DOM id since cssEsc may have lossy mapping
+      const el = document.getElementById(k);
+      if (!el) return null;
+      // Match by name in data + approved set
+      const all = [...data.items, ...approvedAsAssets()];
+      // Match heuristic: el's <h3> or .info .n contains the name
+      const txt = el.querySelector('.info .n')?.textContent || '';
+      return all.find(i => i.name === txt) || null;
+    }
+    if (k.startsWith('miss-')) {
+      const el = document.getElementById(k);
+      if (!el) return null;
+      const txt = el.querySelector('h3')?.textContent || '';
+      return missing.items.find(i => i.name === txt) || null;
+    }
+    if (k.startsWith('trash-')) {
+      const file = k.slice(6);
+      return { _trash: true, name: file };
+    }
+    return null;
+  }).filter(Boolean);
+}
+
+async function bulkDelete() {
+  const items = selectionItems();
+  if (!items.length) return;
+  if (!confirm(`${items.length} öğe silinsin mi?`)) return;
+  toast(`${items.length} öğe siliniyor…`);
+  let ok = 0, fail = 0;
+  // Concurrency cap: 5 parallel.
+  const queue = [...items];
+  await Promise.all(Array.from({ length: 5 }, async () => {
+    while (queue.length) {
+      const i = queue.shift();
+      try {
+        if (i._approved || i._missing || i.status) {
+          // Missing-list item
+          await fetchJson('/api/delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: i.name }),
+          });
+        } else if (i.file) {
+          // Manifest asset
+          const dir = sourceDirFor(i);
+          if (!dir) { fail++; continue; }
+          await fetchJson('/api/asset-delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: i.file, dir }),
+          });
+        } else { fail++; continue; }
+        ok++;
+      } catch { fail++; }
+    }
+  }));
+  clearSelection();
+  toast(`${ok} silindi${fail ? `, ${fail} başarısız` : ''}`, fail ? 'err' : 'ok');
+  setTimeout(load, 600);
+}
+
+async function bulkRestore() {
+  // Trash tab — items have _trash flag.
+  const files = Array.from(selection).filter(k => k.startsWith('trash-')).map(k => k.slice(6));
+  if (!files.length) return;
+  toast(`${files.length} öğe geri yükleniyor…`);
+  let ok = 0, fail = 0;
+  const queue = [...files];
+  await Promise.all(Array.from({ length: 5 }, async () => {
+    while (queue.length) {
+      const file = queue.shift();
+      try {
+        await fetchJson('/api/trash', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'restore', file }),
+        });
+        ok++;
+      } catch { fail++; }
+    }
+  }));
+  clearSelection();
+  toast(`${ok} geri yüklendi${fail ? `, ${fail} başarısız` : ''}`, fail ? 'err' : 'ok');
+  setTimeout(loadTrash, 500);
+}
+
+async function bulkClear() {
+  // "have" tab: clear from missing.json (only applies to approved-as-asset entries).
+  const items = selectionItems().filter(i => i._approved);
+  if (!items.length) return toast('Sadece onaylı kartlar temizlenebilir', 'err');
+  if (!confirm(`${items.length} öğe missing.json'dan temizlensin mi? (asset Mevcut'ta kalır)`)) return;
+  let ok = 0, fail = 0;
+  const queue = [...items];
+  await Promise.all(Array.from({ length: 5 }, async () => {
+    while (queue.length) {
+      const i = queue.shift();
+      try {
+        await fetchJson('/api/clear', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: i.name }),
+        });
+        ok++;
+      } catch { fail++; }
+    }
+  }));
+  clearSelection();
+  toast(`${ok} temizlendi${fail ? `, ${fail} başarısız` : ''}`, fail ? 'err' : 'ok');
+  setTimeout(load, 600);
+}
+
+// --- Keyboard navigation
+function setFocusedCard(el) {
+  document.querySelectorAll('.focused').forEach(x => x.classList.remove('focused'));
+  if (el) {
+    el.classList.add('focused');
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    focusedKey = selectionKey(el);
+  } else focusedKey = null;
+}
+
+function navigateCards(delta) {
+  const all = Array.from(document.querySelectorAll('.card, .miss'));
+  if (!all.length) return;
+  const cur = focusedKey ? all.findIndex(e => selectionKey(e) === focusedKey) : -1;
+  const next = Math.max(0, Math.min(all.length - 1, (cur < 0 ? 0 : cur + delta)));
+  setFocusedCard(all[next]);
+}
+
+function showHelp() { document.getElementById('help-overlay').classList.add('open'); }
+function closeHelp() { document.getElementById('help-overlay').classList.remove('open'); }
 
 // --- IntersectionObserver: defer image src until card enters viewport.
 // Pauses sprite animations when card leaves viewport (saves CPU on big lists).
@@ -444,7 +711,8 @@ function render() {
       }
       if (i.uploadedFile) actions.push(`<a class="btn" href="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}" download="${i.uploadedFile}">İndir</a>`);
       return `
-      <div class="miss" id="miss-${cssEsc(i.name)}">
+      <div class="miss" id="miss-${cssEsc(i.name)}" data-name="${escapeHtml(i.name)}" tabindex="-1">
+        <span class="select-checkbox" role="checkbox" aria-label="Seç" tabindex="0"></span>
         <h3>${i.name}</h3>
         <div class="meta">
           <span class="tag pri-${i.priority}">${i.priority}</span>
@@ -493,7 +761,8 @@ function render() {
       ? `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();unapproveAsset(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Sil (Eksikler'e gönder)</button>`
       : `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();deleteAsset(${JSON.stringify(i.file).replace(/"/g,'&quot;')},${JSON.stringify(sourceDirFor(i)).replace(/"/g,'&quot;')})">Sil</button>`;
     return `
-    <div class="card" id="asset-${cssEsc(i.name)}" data-pending="1">
+    <div class="card" id="asset-${cssEsc(i.name)}" data-pending="1" data-name="${escapeHtml(i.name)}" tabindex="-1">
+      <span class="select-checkbox" role="checkbox" aria-label="Seç" tabindex="0"></span>
       <div class="thumb" onclick="openModal('${i.id}')">${thumbInner}</div>
       <div class="info">
         <div class="n">${i.name}</div>
@@ -506,6 +775,8 @@ function render() {
   }).join('');
   // Observe newly rendered cards for viewport-driven image load.
   observeCards();
+  // Re-apply selection styling after re-render.
+  refreshSelectionUI();
 }
 
 async function unapproveAsset(name) {
@@ -780,7 +1051,8 @@ async function loadTrash() {
     const visibleFiles = j.files.filter(f => !f.name.endsWith('.meta.json'));
     if (!visibleFiles.length) { g.innerHTML = '<div class="empty">Çöp boş.</div>'; return; }
     g.innerHTML = visibleFiles.map(f => `
-      <div class="miss">
+      <div class="miss" id="trash-${escapeHtml(f.name)}" data-name="${escapeHtml(f.name)}" tabindex="-1">
+        <span class="select-checkbox" role="checkbox" aria-label="Seç" tabindex="0"></span>
         <h3>${f.name}</h3>
         <div class="notes">${fmtSize(f.size)}</div>
         <div class="actions">
@@ -788,6 +1060,7 @@ async function loadTrash() {
           ${isAdmin ? `<button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g,'&quot;')})">Kalıcı Sil</button>` : ''}
         </div>
       </div>`).join('');
+    refreshSelectionUI();
   } catch (e) { toast('Trash: ' + e.message, 'err'); }
 }
 
@@ -923,7 +1196,125 @@ document.getElementById('q').oninput = e => { filter.q = e.target.value; render(
 document.getElementById('cat').onchange = e => { filter.cat = e.target.value; render(); };
 document.getElementById('ext').onchange = e => { filter.ext = e.target.value; render(); };
 document.getElementById('type').onchange = e => { filter.type = e.target.value; render(); };
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// --- Bulk bar wiring
+document.getElementById('bulk-action-cancel').onclick = clearSelection;
+document.getElementById('bulk-action-delete').onclick = bulkDelete;
+document.getElementById('bulk-action-restore').onclick = bulkRestore;
+document.getElementById('bulk-action-clear').onclick = bulkClear;
+
+// --- Card click → toggle selection (with shift for range) when in selection mode.
+// Single click without selection mode opens the modal as before.
+document.getElementById('grid').addEventListener('click', e => {
+  const card = e.target.closest('.card, .miss');
+  if (!card) return;
+  const checkbox = e.target.closest('.select-checkbox');
+  if (checkbox) {
+    e.preventDefault(); e.stopPropagation();
+    toggleSelection(card, { shift: e.shiftKey });
+    return;
+  }
+  // Shift-click anywhere on card with existing selection extends range.
+  if (e.shiftKey && selection.size > 0) {
+    e.preventDefault(); e.stopPropagation();
+    toggleSelection(card, { shift: true });
+  }
+}, true);
+
+// --- Keyboard shortcuts with chord support (g h, d d).
+let _chord = ''; let _chordTimer;
+function resetChord() { _chord = ''; clearTimeout(_chordTimer); }
+
+document.addEventListener('keydown', e => {
+  // Don't intercept while typing in inputs/textareas/selects.
+  const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+
+  if (e.key === 'Escape') {
+    closeModal();
+    closeHelp();
+    if (selection.size) { clearSelection(); return; }
+    if (filter.q) { document.getElementById('q').value = ''; filter.q = ''; render(); return; }
+    if (inField) e.target.blur();
+    resetChord();
+    return;
+  }
+
+  if (inField) return;
+
+  // Ctrl/Cmd+A — select all visible
+  if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+    e.preventDefault();
+    document.querySelectorAll('.card, .miss').forEach(el => {
+      const k = selectionKey(el); if (k) selection.add(k);
+    });
+    refreshSelectionUI();
+    return;
+  }
+
+  // Single keys (chord-aware)
+  switch (e.key) {
+    case '/':
+      e.preventDefault();
+      document.getElementById('q').focus();
+      document.getElementById('q').select();
+      resetChord(); return;
+    case '?':
+      e.preventDefault();
+      const ov = document.getElementById('help-overlay');
+      ov.classList.toggle('open');
+      resetChord(); return;
+    case 'j':
+      e.preventDefault(); navigateCards(+1); resetChord(); return;
+    case 'k':
+      e.preventDefault(); navigateCards(-1); resetChord(); return;
+    case 'Enter':
+      if (focusedKey) {
+        const el = document.getElementById(focusedKey);
+        if (el?.classList.contains('card')) {
+          const txt = el.querySelector('.info .n')?.textContent || '';
+          const item = [...data.items, ...approvedAsAssets()].find(i => i.name === txt);
+          if (item) openModal(item.id);
+          e.preventDefault();
+        }
+      }
+      resetChord(); return;
+    case 'x':
+      if (focusedKey) {
+        const el = document.getElementById(focusedKey);
+        if (el) { toggleSelection(el); e.preventDefault(); }
+      }
+      resetChord(); return;
+    case 'g':
+    case 'd':
+      // Start chord
+      _chord = e.key;
+      clearTimeout(_chordTimer);
+      _chordTimer = setTimeout(resetChord, 800);
+      e.preventDefault();
+      return;
+  }
+
+  // Chord continuation
+  if (_chord === 'g') {
+    const map = { h: 'have', t: 'todo', w: 'waiting', d: 'denied' };
+    const target = map[e.key];
+    if (target) {
+      e.preventDefault();
+      const btn = document.querySelector(`.tab[data-tab="${target}"]`);
+      if (btn && btn.style.display !== 'none') btn.click();
+    }
+    resetChord();
+    return;
+  }
+  if (_chord === 'd' && e.key === 'd') {
+    e.preventDefault();
+    if (selection.size) bulkDelete();
+    resetChord();
+    return;
+  }
+
+  resetChord();
+});
 
 load();
 </script>
