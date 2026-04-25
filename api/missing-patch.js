@@ -1,47 +1,45 @@
 // POST /api/missing-patch { name, patch } — patch specific fields of a missing item
 // Allowed fields: status, uploadedFile, denyReason
-import { readConfig, gh } from './_config.js';
+import { handler, validateName, validateFilename, requireFields } from './_handler.js';
 
-const ALLOWED = ['status', 'uploadedFile', 'denyReason'];
+const ALLOWED_STATUS = ['todo', 'in-progress', 'waiting-for-review', 'approved', 'denied', 'blocked'];
+const PATCH_FIELDS = {
+  status: v => typeof v === 'string' && ALLOWED_STATUS.includes(v),
+  uploadedFile: v => v === null || validateFilename(v),
+  denyReason: v => v === null || (typeof v === 'string' && v.length <= 500),
+};
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) return res.status(500).json({ error: 'GITHUB_TOKEN env var not set' });
-  const config = readConfig();
-  const branch = config.github.branch || 'main';
-  const uploadPrefix = config.uploadPath || 'asset-browser/data/uploads';
-  const missingJsonPath = `${uploadPrefix.split('/').slice(0, -1).join('/') || 'asset-browser/data'}/missing.json`;
-
-  try {
-    let body = req.body;
-    if (typeof body === 'string') body = JSON.parse(body);
-    const { name, patch } = body;
-    if (!name || !patch) return res.status(400).json({ error: 'name + patch required' });
-
-    const miss = await gh(token, missingJsonPath, { ref: branch, github: config.github });
-    const json = JSON.parse(Buffer.from(miss.content, 'base64').toString());
-    const item = json.items.find(i => i.name === name);
-    if (!item) return res.status(404).json({ error: 'item not found' });
-
-    for (const k of Object.keys(patch)) {
-      if (!ALLOWED.includes(k)) continue;
-      if (patch[k] === null) delete item[k];
-      else item[k] = patch[k];
-    }
-    json.updated = new Date().toISOString().slice(0, 10);
-
-    await gh(token, missingJsonPath, {
-      method: 'PUT', github: config.github,
-      body: {
-        message: `missing: patch ${name}`,
-        content: Buffer.from(JSON.stringify(json, null, 2)).toString('base64'),
-        sha: miss.sha, branch,
-      },
-    });
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: String(e.message || e) });
+export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh }) => {
+  const err = requireFields(body, ['name', 'patch']);
+  if (err) return res.status(400).json({ error: err });
+  if (!validateName(body.name)) return res.status(400).json({ error: 'invalid name' });
+  if (typeof body.patch !== 'object' || Array.isArray(body.patch)) {
+    return res.status(400).json({ error: 'patch must be object' });
   }
-}
+
+  const miss = await gh(token, paths.missingJsonPath, { ref: branch, github: config.github });
+  const json = JSON.parse(Buffer.from(miss.content, 'base64').toString());
+  const item = json.items.find(i => i.name === body.name);
+  if (!item) return res.status(404).json({ error: 'item not found' });
+
+  for (const k of Object.keys(body.patch)) {
+    const validator = PATCH_FIELDS[k];
+    if (!validator) continue;
+    const v = body.patch[k];
+    if (!validator(v)) return res.status(400).json({ error: `invalid value for ${k}` });
+    if (v === null) delete item[k];
+    else item[k] = v;
+  }
+  json.updated = new Date().toISOString().slice(0, 10);
+
+  await gh(token, paths.missingJsonPath, {
+    method: 'PUT', github: config.github,
+    body: {
+      message: `missing: patch ${body.name}`,
+      content: Buffer.from(JSON.stringify(json, null, 2)).toString('base64'),
+      sha: miss.sha, branch,
+    },
+  });
+
+  res.json({ ok: true });
+});
