@@ -221,6 +221,36 @@ function refreshAdminBadge() {
   badge.classList.toggle('on', !!getAdminToken());
 }
 
+// --- IntersectionObserver: defer image src until card enters viewport.
+// Pauses sprite animations when card leaves viewport (saves CPU on big lists).
+const _io = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    const card = entry.target;
+    if (entry.isIntersecting) {
+      // Activate: lift data-src to src, start animation if any.
+      card.removeAttribute('data-pending');
+      const img = card.querySelector('img[data-src]');
+      if (img) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+      const anim = card.querySelector('.anim-frame[data-anim]');
+      if (anim) {
+        anim.style.animation = anim.dataset.anim;
+        anim.removeAttribute('data-anim');
+      }
+    } else {
+      // Pause: animation eats CPU forever otherwise.
+      const anim = card.querySelector('.anim-frame');
+      if (anim && anim.style.animation && !anim.dataset.anim) {
+        anim.dataset.anim = anim.style.animation;
+        anim.style.animation = 'none';
+      }
+    }
+  }
+}, { rootMargin: '300px 0px' /* preload before fully visible */ });
+
+function observeCards() {
+  document.querySelectorAll('.grid .card[data-pending], .grid .card').forEach(c => _io.observe(c));
+}
+
 // --- Resilient fetch with retry + ETag cache.
 // Honors If-None-Match for free 304s. Retries 1x on 5xx with 400ms backoff.
 const _etagCache = new Map();
@@ -441,7 +471,8 @@ function render() {
   );
   if (!filtered.length) { g.innerHTML = '<div class="empty">Eşleşen asset yok.</div>'; return; }
   g.innerHTML = filtered.map(i => {
-    let thumbInner = `<img loading="lazy" src="${i.src}" alt="${i.name}">`;
+    // Default: deferred-load img (data-src lifted to src on viewport intersection).
+    let thumbInner = `<img data-src="${i.src}" alt="${i.name}" decoding="async" width="160" height="160">`;
     // Animation playback: if strip with N frames (dim like "WxH" where W = H*N)
     if (i.type === 'Animasyon' && i.dim) {
       const m = i.dim.match(/^(\d+)x(\d+)$/);
@@ -452,7 +483,8 @@ function render() {
         if (frames > 1 && w / h === frames) {
           const endX = -((frames - 1) * 128);
           const dur = (frames / 8).toFixed(2);
-          thumbInner = `<div class="anim-frame" style="background-image:url('${i.src}');--end:${endX}px;animation:sprite-play ${dur}s steps(${frames - 1}) infinite;"></div>`;
+          // Animation parked in data-anim until visible; observer activates it.
+          thumbInner = `<div class="anim-frame" data-anim="sprite-play ${dur}s steps(${frames - 1}) infinite" style="background-image:url('${i.src}');--end:${endX}px;animation:none;"></div>`;
         }
       }
     }
@@ -461,7 +493,7 @@ function render() {
       ? `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();unapproveAsset(${JSON.stringify(i.name).replace(/"/g,'&quot;')})">Sil (Eksikler'e gönder)</button>`
       : `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();deleteAsset(${JSON.stringify(i.file).replace(/"/g,'&quot;')},${JSON.stringify(sourceDirFor(i)).replace(/"/g,'&quot;')})">Sil</button>`;
     return `
-    <div class="card" id="asset-${cssEsc(i.name)}">
+    <div class="card" id="asset-${cssEsc(i.name)}" data-pending="1">
       <div class="thumb" onclick="openModal('${i.id}')">${thumbInner}</div>
       <div class="info">
         <div class="n">${i.name}</div>
@@ -472,6 +504,8 @@ function render() {
       </div>
     </div>`;
   }).join('');
+  // Observe newly rendered cards for viewport-driven image load.
+  observeCards();
 }
 
 async function unapproveAsset(name) {
