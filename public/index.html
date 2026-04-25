@@ -234,8 +234,17 @@
     <select id="cat">
       <option value="">Tüm kategoriler</option>
     </select>
-    <select id="ext">
+    <select id="ext" aria-label="Format filtresi">
       <option value="">Tüm formatlar</option>
+    </select>
+    <select id="sort" aria-label="Sıralama">
+      <option value="name">A → Z</option>
+      <option value="name-desc">Z → A</option>
+      <option value="size-desc">Büyük → Küçük</option>
+      <option value="size">Küçük → Büyük</option>
+      <option value="dim-desc">Çözünürlük yüksek</option>
+      <option value="date-desc">Yeni → Eski</option>
+      <option value="date">Eski → Yeni</option>
     </select>
   </div>
 </header>
@@ -297,6 +306,24 @@ function sourceDirFor(item) {
 }
 let tab = 'have';
 let filter = { q: '', cat: '', ext: '', kind: '', type: '' };
+let sortMode = localStorage.getItem('sortMode') || 'name';
+
+function applySort(items) {
+  const dimVal = (d) => {
+    const m = (d || '').match(/^(\d+)x(\d+)$/);
+    return m ? +m[1] * +m[2] : 0;
+  };
+  const cmp = {
+    'name': (a, b) => a.name.localeCompare(b.name),
+    'name-desc': (a, b) => b.name.localeCompare(a.name),
+    'size': (a, b) => (a.size || 0) - (b.size || 0),
+    'size-desc': (a, b) => (b.size || 0) - (a.size || 0),
+    'dim-desc': (a, b) => dimVal(b.dim) - dimVal(a.dim),
+    'date': (a, b) => new Date(a.mtime || 0) - new Date(b.mtime || 0),
+    'date-desc': (a, b) => new Date(b.mtime || 0) - new Date(a.mtime || 0),
+  }[sortMode] || cmp.name;
+  return [...items].sort(cmp);
+}
 
 // --- Admin token: sessionStorage (clears on tab close), with localStorage fallback for "remember"
 function getAdminToken() {
@@ -875,13 +902,13 @@ function render() {
     return;
   }
   const haveItems = itemsForTab();
-  const filtered = haveItems.filter(i =>
+  const filtered = applySort(haveItems.filter(i =>
     matchesSmartQuery(i, parsed) &&
     (!filter.cat || i.category === filter.cat) &&
     (!filter.ext || i.ext === filter.ext) &&
     (!filter.kind || i.kind === filter.kind) &&
     (!filter.type || i.type === filter.type)
-  );
+  ));
   if (!filtered.length) { g.innerHTML = '<div class="empty">Eşleşen asset yok.</div>'; return; }
   g.innerHTML = filtered.map(i => {
     // Default: deferred-load img (data-src lifted to src on viewport intersection).
@@ -1012,6 +1039,13 @@ function uploadFor(name) {
   inp.onchange = async () => {
     const file = inp.files[0]; if (!file) return;
     if (file.size > 20 * 1024 * 1024) return toast('20MB üstü kabul edilmiyor', 'err');
+    // Duplicate detection: warn if filename or pattern already exists.
+    const dup = missing.items.find(i => i.uploadedFile === file.name && i.name !== name)
+      || data.items.find(i => i.file === file.name);
+    if (dup) {
+      const proceed = confirm(`"${file.name}" zaten kullanımda (${dup.name || dup.file}). Yine de yüklensin mi?`);
+      if (!proceed) return;
+    }
     toast('Yükleniyor…');
     const reader = new FileReader();
     reader.onload = async () => {
@@ -1296,6 +1330,32 @@ function fmtSize(b) {
   return (b / 1024 / 1024).toFixed(2) + 'MB';
 }
 
+// --- Modal focus trap. Pushes focus into modal on open, restores on close.
+let _modalLastFocus = null;
+function trapFocusOn(modalEl) {
+  _modalLastFocus = document.activeElement;
+  const focusables = modalEl.querySelectorAll(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  );
+  if (focusables.length) focusables[0].focus();
+  modalEl.addEventListener('keydown', _trapHandler);
+}
+function trapFocusOff(modalEl) {
+  modalEl.removeEventListener('keydown', _trapHandler);
+  if (_modalLastFocus && document.body.contains(_modalLastFocus)) _modalLastFocus.focus();
+  _modalLastFocus = null;
+}
+function _trapHandler(e) {
+  if (e.key !== 'Tab') return;
+  const fs = e.currentTarget.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  if (!fs.length) return;
+  const first = fs[0], last = fs[fs.length - 1];
+  if (e.shiftKey && document.activeElement === first) { last.focus(); e.preventDefault(); }
+  else if (!e.shiftKey && document.activeElement === last) { first.focus(); e.preventDefault(); }
+}
+
 function openModal(id) {
   const i = data.items.find(x => x.id === id) || approvedAsAssets().find(x => x.id === id);
   if (!i) return;
@@ -1332,15 +1392,29 @@ function openModal(id) {
       <div class="row"><span class="k">Güncellenme</span><span>${new Date(i.mtime).toLocaleDateString()}</span></div>
       <a class="dl" href="${i.src}" download="${i.file}">İndir (${i.ext.toUpperCase()})</a>
     </div>`;
-  document.getElementById('modal').classList.add('open');
+  const modalEl = document.getElementById('modal');
+  modalEl.setAttribute('role', 'dialog');
+  modalEl.setAttribute('aria-modal', 'true');
+  modalEl.setAttribute('aria-label', `${i.name} detay`);
+  modalEl.classList.add('open');
+  trapFocusOn(modalEl);
 }
 
-function closeModal() { document.getElementById('modal').classList.remove('open'); }
+function closeModal() {
+  const modalEl = document.getElementById('modal');
+  if (modalEl.classList.contains('open')) trapFocusOff(modalEl);
+  modalEl.classList.remove('open');
+}
 
 document.getElementById('q').oninput = e => { filter.q = e.target.value; render(); };
 document.getElementById('cat').onchange = e => { filter.cat = e.target.value; render(); };
 document.getElementById('ext').onchange = e => { filter.ext = e.target.value; render(); };
 document.getElementById('type').onchange = e => { filter.type = e.target.value; render(); };
+{
+  const sortSel = document.getElementById('sort');
+  sortSel.value = sortMode;
+  sortSel.onchange = e => { sortMode = e.target.value; localStorage.setItem('sortMode', sortMode); render(); };
+}
 
 // --- Bulk bar wiring
 document.getElementById('bulk-action-cancel').onclick = clearSelection;
