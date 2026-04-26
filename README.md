@@ -95,7 +95,12 @@ npm run dev          # build manifest + serve public/ on :5174
 npm test             # node:test (validators + rate-limit + module split, 26 tests)
 npm run lint         # syntax check all api/* + scripts/*
 npm run validate     # JSON shape check on manifest + missing + config
-npm run ci           # lint + test + validate (run by GitHub Actions)
+npm run smoke        # E2E smoke test (status codes + content)
+npm run perf         # Check size budgets for all assets
+npm run ci           # lint + test + validate + smoke + perf (run by GitHub Actions)
+
+- [Performance](./docs/PERFORMANCE.md)
+- [Architecture](./AGENTS.md)
 ```
 
 ### Client structure

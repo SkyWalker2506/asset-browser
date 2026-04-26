@@ -158,3 +158,23 @@ Append-only record of non-obvious technical choices.
 - **Neden:** GDPR-compliant default. We get rate-limit-style "unique requestor" insight without storing or logging actual IPs. Daily rotation prevents historical tracking — even if logs are exfiltrated, yesterday's hash can't be cross-referenced with today's.
 - **Alternatifler:** (a) Log raw IPs — privacy violation, GDPR risk; (b) Truncate IP /24 — still associative across time; (c) Fixed salt — historical tracking remains; (d) Per-request random salt — destroys correlation needed for analytics.
 - **Etkisi:** Logs are safe to ship to any aggregation tool. Rate-limit analytics work within the day. Cross-day analytics (cohort retention etc.) would need a different scheme — not supported by current logger.
+
+## Run 18 — 2026-04-26
+
+### D024: Zero-dep E2E smoke runner instead of Playwright
+- **Karar:** `scripts/smoke.mjs` uses Node built-in `http.createServer` (port 0 = OS-assigned) and `http.request` for 12 route assertions. No Playwright, no Puppeteer, no jsdom.
+- **Neden:** Playwright is 300+ MB across browser binaries; forces ARM/x86 multi-arch concerns; needs CI runners with display capabilities. The smoke runner catches the regressions we actually have: missing manifest link, broken module exports, wrong MIME types, missing data-i18n attributes, 404 on critical files. Render-time issues (focus order, animation timing, contrast) require a visual renderer and aren't worth the dep cost for this team-sized tool.
+- **Alternatifler:** (a) Playwright — gold standard, dep-heavy; (b) jsdom + http — gets you DOM but not CSS rendering, so half a Playwright at half the value; (c) curl + bash assertions — works but harder to maintain than `node --test` patterns.
+- **Etkisi:** Smoke runs in <1s, no CI environment requirements, blocks broken-build merges. Future runs that need browser-driven assertions will need a separate optional script (not gated in CI by default).
+
+### D025: Hard size budget — total public/js at 80KB cap
+- **Karar:** `scripts/perf-budget.mjs` enforces total `public/js/*.js` ≤ 80 KB raw (current: 76.30 KB). Single file ≤ 25 KB. Locale JSON ≤ 8 KB each. index.html ≤ 35 KB. sw.js ≤ 8 KB.
+- **Neden:** With zero bundling, every JS module is a separate HTTP request — but our SW precaches the shell so 1st-load is the only request that matters. 80 KB raw transfers ~25 KB gzipped, well under the 100 KB JS-on-mobile target. Hard cap (vs. soft warn) means the next regression (e.g. accidentally bundling a 50 KB lib) auto-fails CI rather than slowly bloating over months.
+- **Alternatifler:** (a) Soft warn only — silently bloats; (b) Bundle + report — adds bundler dep, defeats Run 13 zero-dep architecture; (c) gzip-aware budget — requires running a real compressor in the test step.
+- **Etkisi:** New features must fit in the remaining ~3.7 KB or earn a budget bump. A heavy feature (canvas drawing, audio playback) should land as a lazy `js/feature.js` loaded on demand — kept out of the shell budget. Budget bumps are a deliberate decision, recorded here.
+
+### D026: Lighthouse as documentation, not as a CI dependency
+- **Karar:** `lighthouserc.json` and `docs/PERFORMANCE.md` give users a one-command Lighthouse run (`npx -y @lhci/cli autorun`) with strict assertions (perf ≥0.9, a11y ≥0.95, best-practices ≥0.95). Not added to package.json deps or `npm run ci`.
+- **Neden:** Lighthouse needs a real Chrome — adds 200+ MB to install. CI already has perf via `scripts/perf-budget.mjs` (size-based). Lighthouse is the "deep dive" before a release; the budget gate is the "every commit" check. Combining them puts the deep dive on every commit which is wasteful for a small team.
+- **Alternatifler:** (a) `@lhci/cli` as devDep + GH Action — costs extra CI minutes for marginal post-fact info; (b) skip Lighthouse entirely — leaves a category gap in the analysis layer; (c) make Lighthouse `npm run perf:full` separate from `npm run perf` — hides the cost without addressing the dep weight.
+- **Etkisi:** Performance posture is auditable: budget gate stops bloat regressions, Lighthouse audit (manually run) scores cross-cutting metrics. Both live in the repo, neither is a build-time dep.
