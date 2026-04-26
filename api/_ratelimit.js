@@ -23,7 +23,7 @@ const SWEEP_INTERVAL_MS = 60_000;
 
 // Default policies. Endpoints not listed inherit DEFAULT.
 // Keyed by the trailing URL segment after `/api/` (e.g. /api/upload → 'upload').
-const POLICIES = {
+export const POLICIES = {
   upload:         { limit: 30,  windowMs: 60_000 },
   'asset-delete': { limit: 10,  windowMs: 60_000 },
   clear:          { limit: 10,  windowMs: 60_000 },
@@ -31,6 +31,7 @@ const POLICIES = {
   'missing-patch':{ limit: 60,  windowMs: 60_000 },
   review:         { limit: 60,  windowMs: 60_000 },
   trash:          { limit: 30,  windowMs: 60_000 },
+  health:         { limit: 60,  windowMs: 60_000 },
   // Read-only and frequently polled endpoints get a generous bucket.
   missing:        { limit: 240, windowMs: 60_000 },
   uploaded:       { limit: 240, windowMs: 60_000 },
@@ -61,6 +62,10 @@ export function _setKvClient(client) {
 export function _resetKvDetection() {
   _kvClient = null;
   _kvDetected = false;
+}
+
+export function isKvDetected() {
+  return _kvDetected;
 }
 
 function detectSharedStore() {

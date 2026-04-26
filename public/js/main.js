@@ -124,22 +124,36 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   render();
 });
 
-// Filter inputs
-document.getElementById('q').oninput = e => { store.filter.q = e.target.value; render(); };
-document.getElementById('cat').onchange = e => { store.filter.cat = e.target.value; render(); };
-document.getElementById('ext').onchange = e => { store.filter.ext = e.target.value; render(); };
-document.getElementById('type').onchange = e => { store.filter.type = e.target.value; render(); };
-{
-  const sortSel = document.getElementById('sort');
-  sortSel.value = store.sortMode;
-  sortSel.onchange = e => { setSortMode(e.target.value); render(); };
-}
+// Filter/Sort inputs delegation
+document.body.addEventListener('input', e => {
+  if (e.target.id === 'q') { store.filter.q = e.target.value; render(); }
+});
+document.body.addEventListener('change', e => {
+  const id = e.target.id;
+  if (id === 'cat') { store.filter.cat = e.target.value; render(); }
+  else if (id === 'ext') { store.filter.ext = e.target.value; render(); }
+  else if (id === 'type') { store.filter.type = e.target.value; render(); }
+  else if (id === 'sort') { setSortMode(e.target.value); render(); }
+});
 
-// Bulk bar
-document.getElementById('bulk-action-cancel').onclick = clearSelection;
-document.getElementById('bulk-action-delete').onclick = bulkDelete;
-document.getElementById('bulk-action-restore').onclick = bulkRestore;
-document.getElementById('bulk-action-clear').onclick = bulkClear;
+// Initial sort value
+document.getElementById('sort').value = store.sortMode;
+
+// Action delegation (Bulk actions + Save filter)
+const actionMap = {
+  'save-filter': () => saveCurrentAsFilter(),
+  'bulk-cancel': clearSelection,
+  'bulk-delete': bulkDelete,
+  'bulk-restore': bulkRestore,
+  'bulk-clear': bulkClear,
+};
+
+document.body.addEventListener('click', e => {
+  const btn = e.target.closest('[data-action]');
+  if (btn && actionMap[btn.dataset.action]) {
+    actionMap[btn.dataset.action]();
+  }
+});
 
 // Card click → toggle selection (with shift for range) when in selection mode.
 // Single click without selection mode opens the modal (via the `<div class=thumb>`'s onclick).

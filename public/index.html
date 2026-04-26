@@ -305,7 +305,7 @@
 <div class="chips" id="saved-filters-bar" style="border-top:0;padding-top:6px;padding-bottom:6px;">
   <span style="font-size:11px;color:#8b6b3d;margin-right:4px;">Kaydedilenler:</span>
   <span id="saved-filters"></span>
-  <button class="save-filter-btn" onclick="saveCurrentAsFilter()" title="Mevcut filtreyi kaydet">+ Kaydet</button>
+  <button class="save-filter-btn" data-action="save-filter" title="Mevcut filtreyi kaydet">+ Kaydet</button>
 </div>
 <details class="stats-panel" id="stats-panel">
   <summary><span>İstatistikler</span><span id="stats-summary" style="margin-left:auto;color:#5c4428;font-size:11px;"></span></summary>
@@ -318,11 +318,11 @@
 </div>
 <div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Çoklu seçim eylemleri">
   <span class="count" id="bulk-count">0 seçili</span>
-  <button id="bulk-action-delete" class="danger" type="button">Sil</button>
-  <button id="bulk-action-restore" type="button" style="display:none;">Geri Yükle</button>
-  <button id="bulk-action-clear" type="button" style="display:none;">Temizle</button>
+  <button id="bulk-action-delete" data-action="bulk-delete" class="danger" type="button">Sil</button>
+  <button id="bulk-action-restore" data-action="bulk-restore" type="button" style="display:none;">Geri Yükle</button>
+  <button id="bulk-action-clear" data-action="bulk-clear" type="button" style="display:none;">Temizle</button>
   <span class="spacer"></span>
-  <button id="bulk-action-cancel" type="button">Vazgeç (Esc)</button>
+  <button id="bulk-action-cancel" data-action="bulk-cancel" type="button">Vazgeç (Esc)</button>
 </div>
 <div class="help-overlay" id="help-overlay" onclick="if(event.target===this)closeHelp()" role="dialog" aria-label="Klavye kısayolları">
   <div class="panel">
