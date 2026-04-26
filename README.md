@@ -34,6 +34,7 @@ Reusable asset browser for game/creative projects. Scans project asset dirs, gen
 - GitHub token never leaks into error responses
 - ETag/304 free hits on `/api/missing` and `/api/uploaded`
 - Per-IP rate limiting on every endpoint (token-bucket): 30 uploads/min, 10 destructive ops/min, 240 reads/min, 120/min default. 429 + `Retry-After` on overflow. Admin token bypasses (logged). Set `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) and `npm i @upstash/redis` to opt into a shared sliding-window store across instances; otherwise per-instance in-memory is used.
+- Security headers: `vercel.json` sets HSTS, X-Frame-Options (DENY), X-Content-Type-Options (nosniff), Referrer-Policy, Permissions-Policy, COOP, and a strict Content Security Policy (CSP) with no `unsafe-inline` for scripts.
 
 ### A11y
 - Modal focus trap (Tab cycle), ARIA dialog roles, aria-labels on filters

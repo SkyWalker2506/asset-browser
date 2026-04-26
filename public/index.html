@@ -312,8 +312,8 @@
   <div class="stats-grid" id="stats-grid" aria-live="polite"></div>
 </details>
 <div class="grid" id="grid"></div>
-<div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
-  <button class="close" onclick="closeModal()">×</button>
+<div class="modal" id="modal">
+  <button class="close">×</button>
   <div class="box" id="box"></div>
 </div>
 <div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Çoklu seçim eylemleri">
@@ -324,7 +324,7 @@
   <span class="spacer"></span>
   <button id="bulk-action-cancel" data-action="bulk-cancel" type="button">Vazgeç (Esc)</button>
 </div>
-<div class="help-overlay" id="help-overlay" onclick="if(event.target===this)closeHelp()" role="dialog" aria-label="Klavye kısayolları">
+<div class="help-overlay" id="help-overlay" role="dialog" aria-label="Klavye kısayolları">
   <div class="panel">
     <h2>Klavye Kısayolları</h2>
     <table>
@@ -345,7 +345,7 @@
       <tr><td>Ctrl/Cmd+V</td><td>Upload modal açıkken yapıştır + yükle</td></tr>
     </table>
     <div style="margin-top:14px;text-align:right;">
-      <button onclick="closeHelp()" style="padding:8px 16px;background:#5c4428;color:#e8dcc0;border:none;border-radius:4px;cursor:pointer;">Tamam</button>
+      <button style="padding:8px 16px;background:#5c4428;color:#e8dcc0;border:none;border-radius:4px;cursor:pointer;">Tamam</button>
     </div>
   </div>
 </div>

@@ -89,3 +89,13 @@ export function closeModal() {
 
 export function showHelp() { document.getElementById('help-overlay').classList.add('open'); }
 export function closeHelp() { document.getElementById('help-overlay').classList.remove('open'); }
+
+// Wire up event listeners to replace inline onclick handlers (CSP compliance)
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.querySelector('#modal .close').addEventListener('click', closeModal);
+document.getElementById('help-overlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeHelp();
+});
+document.querySelector('#help-overlay .panel button').addEventListener('click', closeHelp);
