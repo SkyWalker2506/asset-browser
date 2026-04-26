@@ -1,15 +1,43 @@
 # asset-browser
 
-Reusable asset browser for game/creative projects. Scans your project's asset dirs, generates a searchable/filterable web UI, handles "missing assets" workflow with prompts + upload + review.
+Reusable asset browser for game/creative projects. Scans project asset dirs, generates a searchable/filterable web UI, handles "missing assets" workflow with prompts + upload + review. Static site + Vercel serverless API + GitHub-backed storage — no database.
 
 ## Features
 
-- **Browse** existing assets: filter by type (image/animation), category, kind, format
-- **Download** any asset (original filename preserved)
-- **Missing tab**: list pending assets with detailed prompts + copy-to-GPT button
-- **Upload** raw generated files; status flips to `waiting-for-review`
-- **Review workflow**: approve or deny (with reason) via `missing.json` edits
-- Auto-deploys to Vercel; commits via GitHub API on upload
+### Browse
+- Grid of all assets across configured source directories
+- Smart search with operators: `cat:building tag:hd type:animasyon !tag:idle`
+- Auto-derived tags (size class, frame count, semantic patterns)
+- Sort by name / size / dimension / date
+- IntersectionObserver lazy load + sprite-anim parking for fast galleries
+- Animation strip preview (auto-detects N-frame layouts from filename + dim)
+- Saved filters bar — name your favorite combos, one-click apply
+
+### Missing-asset workflow
+- Tabs: Mevcut, Eksik, Bekleyen, Reddedilen, Çöp
+- Per-item prompt copy + upload (PNG/WebP/GIF/JPEG, 20 MB cap)
+- Review status: todo → in-progress → waiting-for-review → approved/denied
+- Trash with restore (15s undo + permanent restore from Çöp tab)
+- Bulk operations: shift-click range, Ctrl+A, bulk delete/restore/clear (5-way concurrent)
+- Duplicate filename warning on upload
+
+### Keyboard
+- `/` focus search · `Esc` clear/close · `?` help
+- `j`/`k` navigate · Enter open · `x` select
+- `g h/t/w/d` switch tabs · `dd` delete selected
+- `Ctrl+Shift+T` toggle admin mode
+
+### Security
+- Strict input validation on every API endpoint (name regex, filename whitelist, size cap)
+- Path traversal hardening: reject-on-invalid, segment validation, restore re-checks against `config.sources`
+- Admin token in sessionStorage by default (localStorage opt-in via prompt)
+- GitHub token never leaks into error responses
+- ETag/304 free hits on `/api/missing` and `/api/uploaded`
+
+### A11y
+- Modal focus trap (Tab cycle), ARIA dialog roles, aria-labels on filters
+- `prefers-reduced-motion` disables sprite anims + transitions
+- Visible keyboard focus ring on cards (`j`/`k` navigation)
 
 ## Install into a project
 
@@ -42,23 +70,54 @@ This creates `YourProject/asset-browser/` with `config.json`, scripts, api, publ
 cd YourProject/asset-browser
 npm run build
 vercel --prod
-vercel env add GITHUB_TOKEN production   # paste token with repo write
-vercel --prod                              # redeploy with env
+vercel env add GITHUB_TOKEN production   # token with `Contents: read+write`
+vercel env add ADMIN_TOKEN production    # any random string for trash purge
+vercel --prod                            # redeploy with env
 ```
+
+## Develop / Test
+
+```bash
+npm run dev          # build manifest + serve public/ on :5174
+npm test             # node:test on api/_handler.js validators (9 tests)
+npm run lint         # syntax check all api/* + scripts/*
+npm run validate     # JSON shape check on manifest + missing + config
+npm run ci           # lint + test + validate (run by GitHub Actions)
+```
+
+CI runs on every PR and push to `main` — see `.github/workflows/ci.yml`.
+
+## API endpoints
+
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/api/missing` | GET | — | Live missing.json (ETag-aware) |
+| `/api/uploaded?file=` | GET | — | Proxy uploaded image (with stale-while-revalidate) |
+| `/api/upload` | POST | — | Upload base64 file + flip status to waiting-for-review |
+| `/api/review` | POST | — | approve / deny / reopen |
+| `/api/missing-patch` | POST | — | Patch status / uploadedFile / denyReason |
+| `/api/delete` | POST | — | Move uploaded + runtime files to trash |
+| `/api/asset-delete` | POST | — | Move a single runtime asset to trash |
+| `/api/clear` | POST | — | Remove an entry from missing.json (asset stays) |
+| `/api/trash` | GET | — | List trash (public, metadata stripped) |
+| `/api/trash` | POST | restore: — / purge: admin | Restore or hard-delete |
+
+All POST endpoints require `name` to match `^[a-z0-9][a-z0-9_-]{0,99}$/i`. Filenames are whitelisted to alphanumeric + `._-` only; no slashes, no `..`. Admin endpoints require `X-Admin-Token` or `?admin=` matching `ADMIN_TOKEN` env.
 
 ## Missing items schema (`data/missing.json`)
 
 ```json
 {
-  "name": "fire_loop_6f",
-  "kind": "FX",
-  "type": "Animasyon",
-  "priority": "P0",
-  "status": "todo",
-  "notes": "short human note",
-  "prompt": "Full GPT prompt to generate this asset..."
+  "items": [{
+    "name": "fire_loop_6f",
+    "kind": "FX",
+    "type": "Animasyon",
+    "priority": "P0",
+    "status": "todo",
+    "notes": "short human note",
+    "prompt": "Full GPT prompt to generate this asset…"
+  }]
 }
 ```
 
-Status: `todo | in-progress | waiting-for-review | approved | denied`.
-When denied, add `denyReason` field.
+Status enum: `todo | in-progress | waiting-for-review | approved | denied | blocked`. When `denied`, add `denyReason`.

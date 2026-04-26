@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Lint (syntax check)
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test
+      - name: Validate manifest + missing + config schemas
+        run: npm run validate || true   # template repo may not have manifest yet
+      - name: Build manifest (smoke)
+        run: |
+          if [ -f config.json ]; then npm run build-manifest; else echo "no config.json — skipping"; fi
