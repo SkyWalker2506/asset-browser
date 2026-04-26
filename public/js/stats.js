@@ -5,10 +5,11 @@
 import { store } from './state.js';
 import { escapeHtml } from './util.js';
 import { itemsForTab } from './grid.js';
+import { t } from './i18n.js';
 
 function buildBarRows(map) {
   const entries = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  if (!entries.length) return '<div style="font-size:11px;color:#5c4428;">veri yok</div>';
+  if (!entries.length) return `<div style="font-size:11px;color:#5c4428;">${t('status.no_data') || 'veri yok'}</div>`;
   const max = Math.max(...entries.map(e => e[1])) || 1;
   return entries.map(([k, v]) => {
     const pct = Math.round((v / max) * 100);
@@ -38,34 +39,36 @@ export function renderStats(filteredCount) {
   const waitingCount = (store.missing.items || []).filter(i => i.status === 'waiting-for-review').length;
   const approvedCount = (store.missing.items || []).filter(i => i.status === 'approved').length;
 
+  const tabLabel = t(`tabs.${store.tab}`);
+
   grid.innerHTML = `
     <div class="stat-card">
-      <h4>Toplam (${store.tab})</h4>
+      <h4 data-i18n="stats.total">${t('stats.total', { tab: tabLabel })}</h4>
       <div class="total">${total}</div>
-      <div class="dz-sub" style="margin:6px 0 0;">filtreli: <b style="color:#c9b889;">${visible}</b></div>
+      <div class="dz-sub" style="margin:6px 0 0;" data-i18n="stats.filtered">${t('stats.filtered', { count: visible })}</div>
     </div>
     <div class="stat-card">
-      <h4>Kategori</h4>
+      <h4 data-i18n="stats.category">${t('stats.category')}</h4>
       <div class="stat-bars">${buildBarRows(catMap)}</div>
     </div>
     <div class="stat-card">
-      <h4>Kind</h4>
+      <h4 data-i18n="stats.kind">${t('stats.kind')}</h4>
       <div class="stat-bars">${buildBarRows(kindMap)}</div>
     </div>
     <div class="stat-card">
-      <h4>Tip</h4>
+      <h4 data-i18n="stats.type">${t('stats.type')}</h4>
       <div class="stat-bars">${buildBarRows(typeMap)}</div>
     </div>
     <div class="stat-card">
-      <h4>Workflow durumu</h4>
+      <h4 data-i18n="stats.workflow">${t('stats.workflow')}</h4>
       <div class="stat-bars">${buildBarRows(statusMap)}</div>
     </div>
     <div class="stat-card">
-      <h4>Kuyruklar</h4>
-      <div class="stat-row"><span class="label">Eksik</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, missingCount * 5)}%"></span></span><span class="count">${missingCount}</span></div>
-      <div class="stat-row"><span class="label">Bekleyen</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, waitingCount * 8)}%;background:linear-gradient(90deg,#7a6a1f,#d4a849);"></span></span><span class="count">${waitingCount}</span></div>
-      <div class="stat-row"><span class="label">Onaylı</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, approvedCount * 4)}%;background:linear-gradient(90deg,#2a5a2a,#7abb7a);"></span></span><span class="count">${approvedCount}</span></div>
-      <div class="stat-row"><span class="label">Çöp</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, store.trashCountCache * 4)}%;background:linear-gradient(90deg,#4d1f1f,#c94d4d);"></span></span><span class="count">${store.trashCountCache}</span></div>
+      <h4 data-i18n="stats.queues">${t('stats.queues')}</h4>
+      <div class="stat-row"><span class="label" data-i18n="stats.missing">${t('stats.missing')}</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, missingCount * 5)}%"></span></span><span class="count">${missingCount}</span></div>
+      <div class="stat-row"><span class="label" data-i18n="stats.review">${t('stats.review')}</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, waitingCount * 8)}%;background:linear-gradient(90deg,#7a6a1f,#d4a849);"></span></span><span class="count">${waitingCount}</span></div>
+      <div class="stat-row"><span class="label" data-i18n="tabs.approved">${t('tabs.approved') || 'Onaylı'}</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, approvedCount * 4)}%;background:linear-gradient(90deg,#2a5a2a,#7abb7a);"></span></span><span class="count">${approvedCount}</span></div>
+      <div class="stat-row"><span class="label" data-i18n="stats.trash">${t('stats.trash')}</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100, store.trashCountCache * 4)}%;background:linear-gradient(90deg,#4d1f1f,#c94d4d);"></span></span><span class="count">${store.trashCountCache}</span></div>
     </div>`;
-  if (summary) summary.textContent = `${visible}/${total} görünen · ${missingCount} eksik · ${waitingCount} bekleyen`;
+  if (summary) summary.textContent = t('stats.summary', { visible, total, missing: missingCount, waiting: waitingCount });
 }

@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MedievalFactory — Asset Browser</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1a1510">
+<meta name="application-name" content="Asset Browser">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -24,6 +27,19 @@
     padding: 8px 12px; border-radius: 4px; font-size: 14px;
   }
   input { min-width: 220px; }
+  .lang-switcher { display: flex; gap: 4px; margin-left: 8px; }
+  .lang-btn {
+    background: #0f0b07; color: #8b6b3d; border: 1px solid #5c4428;
+    padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;
+    font-weight: 600; transition: all .15s;
+  }
+  .lang-btn:hover { border-color: #d4a849; color: #e8dcc0; }
+  .lang-btn.active { background: #d4a849; color: #1a1510; border-color: #d4a849; }
+  .offline-indicator {
+    background: #7a6a1f; color: #fff; padding: 4px 24px; font-size: 12px;
+    text-align: center; width: 100%;
+  }
+  .offline-indicator[hidden] { display: none; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 24px; background: #110d08; border-bottom: 1px solid #3a2d1d; align-items: center; }
   .saved-chip { display:inline-flex; align-items:center; gap:6px; background:#3a2d1d; }
   .saved-chip .x { opacity:.5; cursor:pointer; padding:0 4px; }
@@ -268,90 +284,95 @@
 </style>
 </head>
 <body>
-<a href="#main-content" class="skip-link">İçeriğe geç</a>
+<a href="#main-content" class="skip-link" data-i18n="header.skip_link">İçeriğe geç</a>
+<div id="offline-banner" class="offline-indicator" hidden role="status" aria-live="polite"></div>
 <header role="banner">
-  <h1>MedievalFactory — Asset Browser</h1>
-  <span class="meta" id="meta">loading…</span>
+  <h1 data-i18n="app.title">MedievalFactory — Asset Browser</h1>
+  <span class="meta" id="meta" data-i18n="status.loading">loading…</span>
   <span class="admin-badge" id="admin-badge" title="Admin mod aktif — Ctrl+Shift+T ile kapat">admin</span>
   <div class="tabs" style="display:flex;gap:6px;flex-wrap:wrap;">
-    <button class="tab active" data-tab="have">Mevcut</button>
-    <button class="tab" data-tab="todo">Eksik</button>
-    <button class="tab" data-tab="waiting">Bekleyen</button>
-    <button class="tab" data-tab="denied">Reddedilen</button>
-    <button class="tab" data-tab="trash" id="trash-tab" style="display:none;">Çöp</button>
+    <button class="tab active" data-tab="have" data-i18n="tabs.have">Mevcut</button>
+    <button class="tab" data-tab="todo" data-i18n="tabs.todo">Eksik</button>
+    <button class="tab" data-tab="waiting" data-i18n="tabs.waiting">Bekleyen</button>
+    <button class="tab" data-tab="denied" data-i18n="tabs.denied">Reddedilen</button>
+    <button class="tab" data-tab="trash" id="trash-tab" style="display:none;" data-i18n="tabs.trash">Çöp</button>
   </div>
   <div class="controls">
-    <input id="q" placeholder="Ara — cat:building tag:hd type:animasyon …" title="Operatörler: cat: kind: type: status: ext: dim: tag: (! ile negation, | ile OR)" aria-label="Arama">
-    <select id="type" aria-label="Tip filtresi">
-      <option value="">Tüm tipler</option>
+    <input id="q" data-i18n-attr="placeholder" data-i18n="header.search_placeholder" placeholder="Ara — cat:building tag:hd type:animasyon …" data-i18n-attr-2="title" data-i18n-2="header.search_title" title="Operatörler: cat: kind: type: status: ext: dim: tag: (! ile negation, | ile OR)" data-i18n-attr-3="aria-label" data-i18n-3="header.search_aria_label" aria-label="Arama">
+    <select id="type" data-i18n-attr="aria-label" data-i18n="header.type_aria_label" aria-label="Tip filtresi">
+      <option value="" data-i18n="filters.all_types">Tüm tipler</option>
       <option value="Resim">Resim</option>
       <option value="Animasyon">Animasyon</option>
     </select>
-    <select id="cat" aria-label="Kategori filtresi">
-      <option value="">Tüm kategoriler</option>
+    <select id="cat" data-i18n-attr="aria-label" data-i18n="header.cat_aria_label" aria-label="Kategori filtresi">
+      <option value="" data-i18n="filters.all_categories">Tüm kategoriler</option>
     </select>
-    <select id="ext" aria-label="Format filtresi">
-      <option value="">Tüm formatlar</option>
+    <select id="ext" data-i18n-attr="aria-label" data-i18n="header.ext_aria_label" aria-label="Format filtresi">
+      <option value="" data-i18n="filters.all_extensions">Tüm formatlar</option>
     </select>
-    <select id="sort" aria-label="Sıralama">
-      <option value="name">A → Z</option>
-      <option value="name-desc">Z → A</option>
-      <option value="size-desc">Büyük → Küçük</option>
-      <option value="size">Küçük → Büyük</option>
-      <option value="dim-desc">Çözünürlük yüksek</option>
-      <option value="date-desc">Yeni → Eski</option>
-      <option value="date">Eski → Yeni</option>
+    <select id="sort" data-i18n-attr="aria-label" data-i18n="header.sort_aria_label" aria-label="Sıralama">
+      <option value="name" data-i18n="filters.sort_name">A → Z</option>
+      <option value="name-desc" data-i18n="filters.sort_name_desc">Z → A</option>
+      <option value="size-desc" data-i18n="filters.sort_size_desc">Büyük → Küçük</option>
+      <option value="size" data-i18n="filters.sort_size">Küçük → Büyük</option>
+      <option value="dim-desc" data-i18n="filters.sort_dim_desc">Çözünürlük yüksek</option>
+      <option value="date-desc" data-i18n="filters.sort_date_desc">Yeni → Eski</option>
+      <option value="date" data-i18n="filters.sort_date">Eski → Yeni</option>
     </select>
+    <div class="lang-switcher" id="lang-switcher" data-i18n-attr="aria-label" data-i18n="lang.switcher_label" aria-label="Dil seçimi">
+      <button class="lang-btn" data-lang="tr" data-i18n="lang.tr">TR</button>
+      <button class="lang-btn" data-lang="en" data-i18n="lang.en">EN</button>
+    </div>
   </div>
 </header>
 <main id="main-content" role="main">
-<div class="chips" id="chips" aria-label="Kategori filtreleri"></div>
+<div class="chips" id="chips" data-i18n-attr="aria-label" data-i18n="header.chips_aria_label" aria-label="Kategori filtreleri"></div>
 <div class="chips" id="saved-filters-bar" style="border-top:0;padding-top:6px;padding-bottom:6px;">
-  <span style="font-size:11px;color:#8b6b3d;margin-right:4px;">Kaydedilenler:</span>
+  <span style="font-size:11px;color:#8b6b3d;margin-right:4px;" data-i18n="chips.saved_filters_label">Kaydedilenler:</span>
   <span id="saved-filters"></span>
-  <button class="save-filter-btn" data-action="save-filter" title="Mevcut filtreyi kaydet">+ Kaydet</button>
+  <button class="save-filter-btn" data-action="save-filter" data-i18n-attr="title" data-i18n="chips.save_filter_title" title="Mevcut filtreyi kaydet" data-i18n="chips.save_filter_btn">+ Kaydet</button>
 </div>
 <details class="stats-panel" id="stats-panel">
-  <summary><span>İstatistikler</span><span id="stats-summary" style="margin-left:auto;color:#5c4428;font-size:11px;"></span></summary>
+  <summary><span data-i18n="stats.panel_title">İstatistikler</span><span id="stats-summary" style="margin-left:auto;color:#5c4428;font-size:11px;"></span></summary>
   <div class="stats-grid" id="stats-grid" aria-live="polite"></div>
 </details>
 <div class="grid" id="grid"></div>
 </main>
-<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Asset detayı">
+<div class="modal" id="modal" role="dialog" aria-modal="true" data-i18n-attr="aria-label" data-i18n="modal.asset_detail_aria_label" aria-label="Asset detayı">
   <button class="close">×</button>
   <div class="box" id="box"></div>
 </div>
-<div class="bulk-bar" id="bulk-bar" role="toolbar" aria-label="Çoklu seçim eylemleri">
+<div class="bulk-bar" id="bulk-bar" role="toolbar" data-i18n-attr="aria-label" data-i18n="header.bulk_aria_label" aria-label="Çoklu seçim eylemleri">
   <span class="count" id="bulk-count">0 seçili</span>
-  <button id="bulk-action-delete" data-action="bulk-delete" class="danger" type="button">Sil</button>
-  <button id="bulk-action-restore" data-action="bulk-restore" type="button" style="display:none;">Geri Yükle</button>
-  <button id="bulk-action-clear" data-action="bulk-clear" type="button" style="display:none;">Temizle</button>
+  <button id="bulk-action-delete" data-action="bulk-delete" class="danger" type="button" data-i18n="bulk.delete">Sil</button>
+  <button id="bulk-action-restore" data-action="bulk-restore" type="button" style="display:none;" data-i18n="bulk.restore">Geri Yükle</button>
+  <button id="bulk-action-clear" data-action="bulk-clear" type="button" style="display:none;" data-i18n="bulk.clear">Temizle</button>
   <span class="spacer"></span>
-  <button id="bulk-action-cancel" data-action="bulk-cancel" type="button">Vazgeç (Esc)</button>
+  <button id="bulk-action-cancel" data-action="bulk-cancel" type="button" data-i18n="bulk.cancel">Vazgeç (Esc)</button>
 </div>
-<div class="help-overlay" id="help-overlay" role="dialog" aria-label="Klavye kısayolları">
+<div class="help-overlay" id="help-overlay" role="dialog" data-i18n-attr="aria-label" data-i18n="help.title" aria-label="Klavye kısayolları">
   <div class="panel">
-    <h2>Klavye Kısayolları</h2>
+    <h2 data-i18n="help.title">Klavye Kısayolları</h2>
     <table>
-      <tr><td>/</td><td>Aramaya odaklan</td></tr>
-      <tr><td>Esc</td><td>Modal kapat / seçimi temizle / aramayı sıfırla</td></tr>
-      <tr><td>?</td><td>Bu yardımı aç/kapat</td></tr>
-      <tr><td>g h</td><td>Mevcut sekmesi</td></tr>
-      <tr><td>g t</td><td>Eksik sekmesi</td></tr>
-      <tr><td>g w</td><td>Bekleyen sekmesi</td></tr>
-      <tr><td>g d</td><td>Reddedilen sekmesi</td></tr>
-      <tr><td>↑ ↓ ← →</td><td>Grid içinde gezin (yön tuşları)</td></tr>
-      <tr><td>j / k</td><td>Sonraki / önceki kart</td></tr>
-      <tr><td>Enter</td><td>Odaklı kartı aç</td></tr>
-      <tr><td>x</td><td>Odaklı kartı seç/seçimden çıkar</td></tr>
-      <tr><td>Shift+Click</td><td>Aralık seç</td></tr>
-      <tr><td>Ctrl/Cmd+A</td><td>Tümünü seç (görünür)</td></tr>
-      <tr><td>d d</td><td>Seçilenleri sil</td></tr>
-      <tr><td>Ctrl+Shift+T</td><td>Admin modu aç/kapat</td></tr>
-      <tr><td>Ctrl/Cmd+V</td><td>Upload modal açıkken yapıştır + yükle</td></tr>
+      <tr><td>/</td><td data-i18n="help.focus_search">Aramaya odaklan</td></tr>
+      <tr><td>Esc</td><td data-i18n="help.esc_desc">Modal kapat / seçimi temizle / aramayı sıfırla</td></tr>
+      <tr><td>?</td><td data-i18n="help.help_desc">Bu yardımı aç/kapat</td></tr>
+      <tr><td>g h</td><td data-i18n="tabs.have">Mevcut sekmesi</td></tr>
+      <tr><td>g t</td><td data-i18n="tabs.todo">Eksik sekmesi</td></tr>
+      <tr><td>g w</td><td data-i18n="tabs.waiting">Bekleyen sekmesi</td></tr>
+      <tr><td>g d</td><td data-i18n="tabs.denied">Reddedilen sekmesi</td></tr>
+      <tr><td>↑ ↓ ← →</td><td data-i18n="help.nav_desc">Grid içinde gezin (yön tuşları)</td></tr>
+      <tr><td>j / k</td><td data-i18n="help.jk_desc">Sonraki / önceki kart</td></tr>
+      <tr><td>Enter</td><td data-i18n="help.enter_desc">Odaklı kartı aç</td></tr>
+      <tr><td>x</td><td data-i18n="help.x_desc">Odaklı kartı seç/seçimden çıkar</td></tr>
+      <tr><td>Shift+Click</td><td data-i18n="help.shift_click_desc">Aralık seç</td></tr>
+      <tr><td>Ctrl/Cmd+A</td><td data-i18n="help.select_all_desc">Tümünü seç (görünür)</td></tr>
+      <tr><td>d d</td><td data-i18n="help.dd_desc">Seçilenleri sil</td></tr>
+      <tr><td>Ctrl+Shift+T</td><td data-i18n="help.admin_desc">Admin modu aç/kapat</td></tr>
+      <tr><td>Ctrl/Cmd+V</td><td data-i18n="help.paste_desc">Upload modal açıkken yapıştır + yükle</td></tr>
     </table>
     <div style="margin-top:14px;text-align:right;">
-      <button style="padding:8px 16px;background:#5c4428;color:#e8dcc0;border:none;border-radius:4px;cursor:pointer;">Tamam</button>
+      <button style="padding:8px 16px;background:#5c4428;color:#e8dcc0;border:none;border-radius:4px;cursor:pointer;" data-i18n="help.close_btn">Tamam</button>
     </div>
   </div>
 </div>

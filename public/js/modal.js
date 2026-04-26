@@ -3,6 +3,7 @@
 
 import { store } from './state.js';
 import { fmtSize } from './util.js';
+import { t } from './i18n.js';
 
 let _modalLastFocus = null;
 
@@ -63,20 +64,20 @@ export function openModal(id) {
     <div class="preview">${previewInner}</div>
     <div class="details">
       <h2>${i.name}</h2>
-      <div class="row"><span class="k">Kategori</span><span>${i.category}</span></div>
-      <div class="row"><span class="k">Tip</span><span>${i.type}</span></div>
-      <div class="row"><span class="k">Tür</span><span>${i.kind}</span></div>
-      <div class="row"><span class="k">Format</span><span>${i.ext.toUpperCase()}</span></div>
-      <div class="row"><span class="k">Boyut</span><span>${i.dim || '—'}</span></div>
-      <div class="row"><span class="k">Dosya</span><span>${fmtSize(i.size)}</span></div>
-      <div class="row"><span class="k">Dosya adı</span><span style="word-break:break-all;">${i.file}</span></div>
-      <div class="row"><span class="k">Güncellenme</span><span>${new Date(i.mtime).toLocaleDateString()}</span></div>
-      <a class="dl" href="${i.src}" download="${i.file}">İndir (${i.ext.toUpperCase()})</a>
+      <div class="row"><span class="k" data-i18n="stats.category">${t('stats.category')}</span><span>${i.category}</span></div>
+      <div class="row"><span class="k" data-i18n="stats.type">${t('stats.type')}</span><span>${i.type}</span></div>
+      <div class="row"><span class="k" data-i18n="stats.kind">${t('stats.kind')}</span><span>${i.kind}</span></div>
+      <div class="row"><span class="k" data-i18n="modal.format">${t('modal.format') || 'Format'}</span><span>${i.ext.toUpperCase()}</span></div>
+      <div class="row"><span class="k" data-i18n="modal.dimensions">${t('modal.dimensions') || 'Boyut'}</span><span>${i.dim || '—'}</span></div>
+      <div class="row"><span class="k" data-i18n="modal.size">${t('modal.size') || 'Dosya'}</span><span>${fmtSize(i.size)}</span></div>
+      <div class="row"><span class="k" data-i18n="modal.filename">${t('modal.filename') || 'Dosya adı'}</span><span style="word-break:break-all;">${i.file}</span></div>
+      <div class="row"><span class="k" data-i18n="modal.updated">${t('modal.updated') || 'Güncellenme'}</span><span>${new Date(i.mtime).toLocaleDateString()}</span></div>
+      <a class="dl" href="${i.src}" download="${i.file}" data-i18n="actions.download">${t('actions.download')} (${i.ext.toUpperCase()})</a>
     </div>`;
   const modalEl = document.getElementById('modal');
   modalEl.setAttribute('role', 'dialog');
   modalEl.setAttribute('aria-modal', 'true');
-  modalEl.setAttribute('aria-label', `${i.name} detay`);
+  modalEl.setAttribute('aria-label', t('modal.asset_detail_aria_label'));
   modalEl.classList.add('open');
   trapFocusOn(modalEl);
 }

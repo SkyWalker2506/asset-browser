@@ -3,6 +3,7 @@
 
 import { readConfig, gh } from './_config.js';
 import { applyRateLimit } from './_ratelimit.js';
+import { log, incr, hashIp } from './_logger.js';
 
 // Asset names: kebab/snake case, no path chars
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,99}$/i;
@@ -87,25 +88,49 @@ function deriveRouteName(req, override) {
 // opts: { method?: 'POST'|'GET', requireToken?: boolean (default true), rateLimitName?: string,
 //         skipRateLimit?: boolean }
 export function handler(opts, fn) {
-  const { method, requireToken = true, rateLimitName, skipRateLimit = false } = opts || {};
+  const { method: targetMethod, requireToken = true, rateLimitName, skipRateLimit = false } = opts || {};
   return async (req, res) => {
-    if (method && req.method !== method) {
-      return res.status(405).json({ error: `${method} only` });
+    const start = Date.now();
+    const route = deriveRouteName(req, rateLimitName);
+    const ip_hash = hashIp(req.headers['x-forwarded-for'] || req.socket.remoteAddress);
+
+    // Patch res.end to log at the very end of any response
+    const originalEnd = res.end;
+    let logged = false;
+    res.end = function(...args) {
+      if (!logged) {
+        logged = true;
+        const duration_ms = Date.now() - start;
+        const status = res.statusCode;
+        log('info', 'api.request', { method: req.method, route, status, duration_ms, ip_hash });
+        incr('requests_total');
+        incr(`requests_by_route.${route}`);
+      }
+      return originalEnd.apply(this, args);
+    };
+
+    if (targetMethod && req.method !== targetMethod) {
+      return res.status(405).json({ error: `${targetMethod} only` });
     }
+
     // Rate-limit before any work. Admin token bypasses the bucket but is logged.
     if (!skipRateLimit) {
-      const route = deriveRouteName(req, rateLimitName);
       if (isAdmin(req)) {
-        // Log admin bypass for audit visibility (best-effort; Vercel captures stdout).
-        try { console.log(`[ratelimit] admin bypass route=${route}`); } catch {}
+        log('info', 'api.admin_bypass', { route, ip_hash });
       } else {
-        if (applyRateLimit(req, res, route)) return; // 429 already sent
+        if (applyRateLimit(req, res, route)) {
+          log('warn', 'api.ratelimited', { route, ip_hash });
+          incr('ratelimited_total');
+          return; // 429 already sent
+        }
       }
     }
+
     const token = process.env.GITHUB_TOKEN;
     if (requireToken && !token) {
       return res.status(500).json({ error: 'GITHUB_TOKEN env var not set' });
     }
+
     try {
       const config = readConfig();
       if (!config.github?.owner || !config.github?.repo) {
@@ -117,9 +142,13 @@ export function handler(opts, fn) {
       return await fn({ req, res, token, config, branch, body, paths, gh });
     } catch (e) {
       const msg = String(e?.message || e || 'unknown');
+      log('error', 'api.error', { error: msg, stack: e.stack?.slice(0, 500), route, ip_hash });
+      incr('errors_total');
       // Avoid leaking GitHub API tokens or auth headers in error responses.
       const safe = msg.replace(/Bearer [A-Za-z0-9_\-.]+/g, 'Bearer ***');
-      res.status(500).json({ error: safe });
+      if (!res.writableEnded) {
+        res.status(500).json({ error: safe });
+      }
     }
   };
 }

@@ -132,3 +132,29 @@ Append-only record of non-obvious technical choices.
 - **Neden:** axe-core requires a browser runtime (Playwright/Puppeteer/jsdom) to execute — adding it would (a) add 30-80 MB of dev deps, (b) require a headless browser in CI (adds ~30s build time), (c) catch the same structural issues that static regex can catch, plus dynamic issues (contrast, focus order) that we can't fix without a visual renderer anyway. The static check covers ~80% of the value: it gates against regressions in landmark presence, role attributes, and aria-label existence. Dynamic A11y coverage (colour contrast, keyboard focus order correctness, live region actual firing) is left for manual testing or a future dedicated a11y CI job.
 - **Alternatifler:** (a) `@axe-core/playwright` — correct, but adds Playwright as dev dep and a headless Chrome process to CI; (b) `axe-core` + jsdom — jsdom doesn't render CSS so contrast checks fail silently; (c) `pa11y-ci` — requires a running HTTP server, adds network hop; (d) no CI check at all — regresses on every refactor.
 - **Etkisi:** 8 new tests in `api/a11y.test.js` run as part of `npm run test` (now 40 total). Also available standalone via `npm run a11y`. Future runs can upgrade to Playwright axe-core when the CI environment supports it — the test file is the extension point.
+
+## Run 17 — 2026-04-26
+
+### D020: Three-stream parallel Gemini brief (i18n + PWA + observability) in one invocation
+- **Karar:** Single Gemini CLI invocation with one combined brief covering three independent feature streams. No separate per-stream agents.
+- **Neden:** The streams touched mostly disjoint files (locales/*, sw.js, _logger.js are entirely new; index.html and main.js were the only shared touchpoints). Splitting into three Gemini processes would have caused merge conflicts on index.html (manifest link + offline banner + lang switcher + data-i18n attributes) and main.js (i18n + pwa imports). One brief, one pass, one diff is faster and conflict-free.
+- **Alternatifler:** (a) Three sequential Gemini calls — works but 3× the orchestration overhead; (b) Three parallel Gemini processes — file conflicts on shared files; (c) Manual orchestration — slower and forgoes Gemini's autonomous read-many-files capability.
+- **Etkisi:** 8 modified + 13 added files in one diff, 51/51 tests pass on first run, no rework. Pattern reusable for future runs whose work streams have low file overlap (≤2 shared files).
+
+### D021: i18n missing-key fallback returns the key, warns once
+- **Karar:** `t('foo.bar.missing')` returns the literal `'foo.bar.missing'` and console.warns once per missing key (not per call). No throw, no empty string.
+- **Neden:** Returning the key keeps the UI rendering (so the bug is visible but the page doesn't crash). One warn per key keeps the console signal-to-noise high — repeated calls don't spam. An empty string would silently delete UI text, making the bug invisible.
+- **Alternatifler:** (a) Throw on miss — crashes the UI for any production string drift; (b) Empty string fallback — silent UI degradation; (c) Warn every call — console flood.
+- **Etkisi:** New strings without locale entries surface immediately in dev (visible key in UI, console warning) but degrade gracefully in production (no crash).
+
+### D022: SW cache name uses `ab-v1` semver, activate purges everything not matching
+- **Karar:** `CACHE_VERSION = 'ab-v1'` constant. Install precaches into that name. Activate iterates `caches.keys()` and deletes any name starting with `ab-` that doesn't equal CACHE_VERSION. Foreign cache names (other apps on the same origin) are left alone.
+- **Neden:** Bumping CACHE_VERSION (to `ab-v2` etc) on a SW logic change is the canonical way to force-purge stale caches. Restricting purge to `ab-` prefix means we don't accidentally delete other apps' caches if the asset-browser is one of several PWAs on the same origin.
+- **Alternatifler:** (a) Static cache name — old caches accumulate forever; (b) Date-based name — every deploy invalidates everything (kills cache benefit); (c) Delete all caches on activate — destructive to other apps.
+- **Etkisi:** SW logic changes need a CACHE_VERSION bump (manual but obvious). One-line change. Old caches removed on first activate after the bump.
+
+### D023: Observability — privacy-preserving IP hash with daily salt
+- **Karar:** `hashIp(ip)` returns `sha256(ip + DAILY_SALT).slice(0, 8)` where `DAILY_SALT = String(Date.UTC(year, month, date))`. Same IP same UTC day = same hash (useful for "is this 1 user or 100?"). Different day = different hash. No long-term correlation.
+- **Neden:** GDPR-compliant default. We get rate-limit-style "unique requestor" insight without storing or logging actual IPs. Daily rotation prevents historical tracking — even if logs are exfiltrated, yesterday's hash can't be cross-referenced with today's.
+- **Alternatifler:** (a) Log raw IPs — privacy violation, GDPR risk; (b) Truncate IP /24 — still associative across time; (c) Fixed salt — historical tracking remains; (d) Per-request random salt — destroys correlation needed for analytics.
+- **Etkisi:** Logs are safe to ship to any aggregation tool. Rate-limit analytics work within the day. Cross-day analytics (cohort retention etc.) would need a different scheme — not supported by current logger.

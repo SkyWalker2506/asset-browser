@@ -5,6 +5,7 @@
 import { store } from './state.js';
 import { toast, escapeHtml } from './util.js';
 import { load, srStatus } from './main.js';
+import { t } from './i18n.js';
 
 const ACCEPT_MIME = ['image/png', 'image/webp', 'image/gif', 'image/jpeg'];
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -50,19 +51,19 @@ export function uploadFor(name) {
   overlay.id = 'upload-modal';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-label', `${name} için dosya yükle`);
+  overlay.setAttribute('aria-label', t('modal.upload_paste', { name }));
   overlay.style.zIndex = '250';
   overlay.innerHTML = `
     <div class="upload-box" tabindex="-1">
-      <button class="close" aria-label="Kapat" data-close>×</button>
-      <h2 style="margin:0 0 6px;color:#d4a849;font-size:18px;">Yükle: ${escapeHtml(name)}</h2>
+      <button class="close" aria-label="${t('actions.close')}" data-close>×</button>
+      <h2 style="margin:0 0 6px;color:#d4a849;font-size:18px;">${t('modal.upload_paste', { name })}</h2>
       <p style="margin:0 0 14px;color:#8b6b3d;font-size:12px;">PNG / WebP / GIF / JPEG · max 20 MB</p>
       <div class="dropzone" id="dz" tabindex="0" role="button"
-           aria-label="Dosyayı buraya sürükleyin veya gözatmak için Enter'a basın">
+           aria-label="${t('modal.upload_drop')}">
         <div class="dz-icon" aria-hidden="true">⤓</div>
-        <div class="dz-title">Dosyayı buraya sürükleyin</div>
-        <div class="dz-sub">veya yapıştırın (Ctrl+V) · ya da</div>
-        <button type="button" class="dz-browse" data-browse>Gözat…</button>
+        <div class="dz-title">${t('modal.upload_choose')}</div>
+        <div class="dz-sub">${t('modal.upload_drop')}</div>
+        <button type="button" class="dz-browse" data-browse>${t('actions.browse')}</button>
         <div class="dz-hint" id="dz-hint" aria-live="polite"></div>
       </div>
     </div>`;
@@ -80,22 +81,22 @@ export function uploadFor(name) {
   const sendFiles = async (files) => {
     const list = Array.from(files || []);
     if (!list.length) return;
-    if (list.length > 1) setHint(`${list.length} dosya · sırayla yükleniyor`, '');
+    if (list.length > 1) setHint(t('status.uploading_multiple', { count: list.length }) || `${list.length} dosya · sırayla yükleniyor`, '');
     let okCount = 0, failCount = 0;
     for (const f of list) {
-      setHint(`Yükleniyor: ${f.name}`, '');
+      setHint(t('status.uploading', { name: f.name }), '');
       try {
         await performUpload(name, f);
         okCount++;
       } catch (e) {
         failCount++;
-        setHint(`Hata: ${e.message}`, 'err');
+        setHint(t('status.failed', { error: e.message }), 'err');
       }
     }
     if (okCount) {
-      toast(okCount === 1 ? 'Yüklendi — waiting-for-review' : `${okCount} dosya yüklendi`);
-      if (okCount === 1 && list.length === 1) srStatus(list[0].name + ' yüklendi');
-      else srStatus(okCount + ' dosya yüklendi');
+      toast(okCount === 1 ? (t('status.complete') || 'Yüklendi — waiting-for-review') : t('status.complete_multiple', { count: okCount }) || `${okCount} dosya yüklendi`);
+      if (okCount === 1 && list.length === 1) srStatus(t('sr.upload_done', { name: list[0].name }));
+      else srStatus(t('sr.upload_done', { name: okCount + ' files' }));
       setTimeout(load, 600);
     }
     if (!failCount) cleanup();

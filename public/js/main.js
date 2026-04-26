@@ -47,6 +47,8 @@ import {
   toggleSelection,
 } from './selection.js';
 import { installKeyboard } from './keyboard.js';
+import { loadLocale, getLang, applyDom, setLang, t } from './i18n.js';
+import { registerSW, initOnlineStatus } from './pwa.js';
 
 let _srTimer;
 export function srStatus(msg) {
@@ -59,7 +61,15 @@ export function srStatus(msg) {
 
 // --- Boot
 export async function load() {
-  document.getElementById('meta').textContent = 'loading…';
+  const lang = getLang();
+  await loadLocale(lang);
+  applyDom();
+  document.documentElement.lang = lang;
+  updateLangSwitcherUI(lang);
+  registerSW();
+  initOnlineStatus();
+
+  document.getElementById('meta').textContent = t('status.loading');
   const [r, m, c] = await Promise.all([
     fetch('./manifest.json?' + Date.now()).then(x => x.json()),
     fetchJson('/api/missing').catch(() => fetch('./missing.json').then(x => x.json())).catch(() => ({ items: [] })),
@@ -98,20 +108,38 @@ export async function loadTrash() {
     if (!r.ok) throw new Error(j.error);
     const g = document.getElementById('grid');
     const visibleFiles = j.files.filter(f => !f.name.endsWith('.meta.json'));
-    if (!visibleFiles.length) { g.innerHTML = '<div class="empty">Çöp boş.</div>'; return; }
+    if (!visibleFiles.length) { g.innerHTML = `<div class="empty" data-i18n="status.empty_trash">${t('status.empty_trash')}</div>`; return; }
     g.innerHTML = visibleFiles.map(f => `
       <div class="miss" id="trash-${escapeHtml(f.name)}" data-name="${escapeHtml(f.name)}" tabindex="-1">
-        <span class="select-checkbox" role="checkbox" aria-label="Seç" tabindex="0"></span>
+        <span class="select-checkbox" role="checkbox" aria-label="${t('actions.select')}" tabindex="0"></span>
         <h3>${f.name}</h3>
         <div class="notes">${fmtSize(f.size)}</div>
         <div class="actions">
-          <button class="btn primary" onclick="restoreTrash(${JSON.stringify(f.name).replace(/"/g, '&quot;')})">Geri Yükle</button>
-          ${isAdmin ? `<button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g, '&quot;')})">Kalıcı Sil</button>` : ''}
+          <button class="btn primary" onclick="restoreTrash(${JSON.stringify(f.name).replace(/"/g, '&quot;')})" data-i18n="actions.restore">${t('actions.restore')}</button>
+          ${isAdmin ? `<button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g, '&quot;')})" data-i18n="actions.delete">${t('actions.delete')}</button>` : ''}
         </div>
       </div>`).join('');
     refreshSelectionUI();
   } catch (e) { toast('Trash: ' + e.message, 'err'); }
 }
+
+function updateLangSwitcherUI(lang) {
+  document.querySelectorAll('.lang-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.lang === lang);
+  });
+}
+
+window.addEventListener('i18n:change', e => {
+  updateLangSwitcherUI(e.detail);
+  updateMeta();
+  render();
+});
+
+// Lang switcher click
+document.getElementById('lang-switcher').addEventListener('click', e => {
+  const btn = e.target.closest('.lang-btn');
+  if (btn) setLang(btn.dataset.lang);
+});
 
 // --- Wire DOM events. We do this once on module load (DOM is parsed before
 // the deferred `<script type="module">` executes).
@@ -140,7 +168,7 @@ document.body.addEventListener('input', e => {
     render();
     setTimeout(() => {
       const count = document.querySelectorAll('#grid .card, #grid .miss').length;
-      srStatus(count + ' asset gösteriliyor');
+      srStatus(t('sr.filter_count', { count }));
     }, 50);
   }
 });
@@ -156,7 +184,7 @@ document.body.addEventListener('change', e => {
     render();
     setTimeout(() => {
       const count = document.querySelectorAll('#grid .card, #grid .miss').length;
-      srStatus(count + ' asset gösteriliyor');
+      srStatus(t('sr.filter_count', { count }));
     }, 50);
   }
 });
@@ -168,7 +196,7 @@ document.getElementById('sort').value = store.sortMode;
 const actionMap = {
   'save-filter': () => saveCurrentAsFilter(),
   'bulk-cancel': clearSelection,
-  'bulk-delete': async () => { await bulkDelete(); srStatus('Silme tamamlandı'); },
+  'bulk-delete': async () => { await bulkDelete(); srStatus(t('sr.delete_done')); },
   'bulk-restore': bulkRestore,
   'bulk-clear': bulkClear,
 };
@@ -189,13 +217,13 @@ document.getElementById('grid').addEventListener('click', e => {
   if (checkbox) {
     e.preventDefault(); e.stopPropagation();
     toggleSelection(card, { shift: e.shiftKey });
-    srStatus(selection.size + ' seçili');
+    srStatus(t('sr.selection_count', { count: selection.size }));
     return;
   }
   if (e.shiftKey && selection.size > 0) {
     e.preventDefault(); e.stopPropagation();
     toggleSelection(card, { shift: true });
-    srStatus(selection.size + ' seçili');
+    srStatus(t('sr.selection_count', { count: selection.size }));
   }
 }, true);
 
@@ -203,29 +231,35 @@ document.getElementById('grid').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'T') {
     e.preventDefault();
-    const t = prompt('Admin token (boş bırakırsan çıkış):');
-    if (t) {
-      const remember = confirm('Tarayıcı kapanınca da hatırlansın mı? (İptal = sadece bu sekme)');
-      setAdminToken(t, remember);
+    const tr = getLang() === 'tr';
+    const tPrompt = tr ? 'Admin token (boş bırakırsan çıkış):' : 'Admin token (empty to logout):';
+    const tConfirm = tr ? 'Tarayıcı kapanınca da hatırlansın mı? (İptal = sadece bu sekme)' : 'Remember even after browser close? (Cancel = session only)';
+    const token = prompt(tPrompt);
+    if (token) {
+      const remember = confirm(tConfirm);
+      setAdminToken(token, remember);
       document.getElementById('trash-tab').style.display = '';
       refreshAdminBadge();
-      toast('Admin mod aktif' + (remember ? ' (kalıcı)' : ' (oturum)'));
+      const msg = t('status.admin_active') + (remember ? (tr ? ' (kalıcı)' : ' (persistent)') : (tr ? ' (oturum)' : ' (session)'));
+      toast(msg);
     } else {
       clearAdminToken();
       document.getElementById('trash-tab').style.display = 'none';
       refreshAdminBadge();
-      toast('Admin mod kapalı');
+      toast(t('status.admin_inactive'));
     }
   }
 });
 
 // Admin badge click → quick logout
 document.getElementById('admin-badge').addEventListener('click', () => {
-  if (confirm('Admin moddan çıkılsın mı?')) {
+  const tr = getLang() === 'tr';
+  const tConfirm = tr ? 'Admin moddan çıkılsın mı?' : 'Logout from admin mode?';
+  if (confirm(tConfirm)) {
     clearAdminToken();
     document.getElementById('trash-tab').style.display = 'none';
     refreshAdminBadge();
-    toast('Admin mod kapalı');
+    toast(t('status.admin_inactive'));
   }
 });
 

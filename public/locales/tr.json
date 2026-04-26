@@ -1,0 +1,106 @@
+{
+  "app": {
+    "title": "MedievalFactory — Asset Browser",
+    "tagline": "Ortaçağ oyun varlıkları envanteri ve yönetimi"
+  },
+  "header": {
+    "skip_link": "İçeriğe geç",
+    "search_placeholder": "Ara — cat:building tag:hd type:animasyon …",
+    "search_title": "Operatörler: cat: kind: type: status: ext: dim: tag: (! ile negation, | ile OR)",
+    "search_aria_label": "Arama",
+    "help": "Yardım",
+    "upload": "Yükle"
+  },
+  "tabs": {
+    "have": "Mevcut",
+    "todo": "Eksik",
+    "waiting": "Bekleyen",
+    "denied": "Reddedilen",
+    "trash": "Çöp"
+  },
+  "filters": {
+    "all_types": "Tüm tipler",
+    "all_categories": "Tüm kategoriler",
+    "all_extensions": "Tüm formatlar",
+    "sort_name": "A → Z",
+    "sort_name_desc": "Z → A",
+    "sort_size_desc": "Büyük → Küçük",
+    "sort_size": "Küçük → Büyük",
+    "sort_dim_desc": "Çözünürlük yüksek",
+    "sort_date_desc": "Yeni → Eski",
+    "sort_date": "Eski → Yeni"
+  },
+  "chips": {
+    "show_all": "Tümü",
+    "uploaded_only": "Sadece Yüklenenler",
+    "missing_only": "Sadece Eksikler",
+    "review_pending": "İnceleme Bekleyenler",
+    "recently_added": "Son Eklenenler",
+    "saved_filters_label": "Kaydedilenler:",
+    "save_filter_btn": "+ Kaydet",
+    "save_filter_title": "Mevcut filtreyi kaydet"
+  },
+  "actions": {
+    "delete": "Sil",
+    "restore": "Geri Yükle",
+    "approve": "Onayla",
+    "reject": "Reddet",
+    "cancel": "Vazgeç (Esc)",
+    "confirm": "Tamam",
+    "copy": "Prompt Kopyala",
+    "upload": "Upload",
+    "clear": "Temizle",
+    "close": "Kapat",
+    "browse": "Gözat…",
+    "download": "İndir"
+  },
+  "modal": {
+    "delete_confirm": "Silmek istediğinize emin misiniz?",
+    "upload_choose": "Dosyayı buraya sürükleyin",
+    "upload_drop": "veya yapıştırın (Ctrl+V) · ya da",
+    "upload_paste": "Yükle: {name}",
+    "help_title": "Klavye Kısayolları",
+    "asset_detail_aria_label": "Asset detayı"
+  },
+  "status": {
+    "ready": "Hazır",
+    "loading": "Yükleniyor…",
+    "uploading": "Yükleniyor: {name}",
+    "deleting": "Siliniyor…",
+    "complete": "Tamamlandı",
+    "failed": "Hata: {error}",
+    "offline": "Çevrimdışı",
+    "online": "Çevrimiçi",
+    "empty_list": "Liste boş.",
+    "empty_matches": "Eşleşen asset yok.",
+    "empty_trash": "Çöp boş.",
+    "admin_active": "Admin mod aktif",
+    "admin_inactive": "Admin mod kapalı"
+  },
+  "stats": {
+    "panel_title": "İstatistikler",
+    "total": "Toplam ({tab})",
+    "uploaded": "Mevcut",
+    "missing": "Eksik",
+    "review": "Bekleyen",
+    "trash": "Çöp",
+    "category": "Kategori",
+    "kind": "Tür",
+    "type": "Tip",
+    "workflow": "Workflow durumu",
+    "queues": "Kuyruklar",
+    "filtered": "filtreli: {count}",
+    "summary": "{visible}/{total} görünen · {missing} eksik · {waiting} bekleyen"
+  },
+  "sr": {
+    "filter_count": "{count} asset gösteriliyor",
+    "upload_done": "{name} yüklendi",
+    "delete_done": "Silme tamamlandı",
+    "selection_count": "{count} seçili"
+  },
+  "lang": {
+    "switcher_label": "Dil seçimi",
+    "tr": "TR",
+    "en": "EN"
+  }
+}
