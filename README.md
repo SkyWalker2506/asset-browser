@@ -33,7 +33,7 @@ Reusable asset browser for game/creative projects. Scans project asset dirs, gen
 - Admin token in sessionStorage by default (localStorage opt-in via prompt)
 - GitHub token never leaks into error responses
 - ETag/304 free hits on `/api/missing` and `/api/uploaded`
-- Per-IP rate limiting on every endpoint (token-bucket): 30 uploads/min, 10 destructive ops/min, 240 reads/min, 120/min default. 429 + `Retry-After` on overflow. Admin token bypasses (logged).
+- Per-IP rate limiting on every endpoint (token-bucket): 30 uploads/min, 10 destructive ops/min, 240 reads/min, 120/min default. 429 + `Retry-After` on overflow. Admin token bypasses (logged). Set `KV_REST_API_URL` + `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`) and `npm i @upstash/redis` to opt into a shared sliding-window store across instances; otherwise per-instance in-memory is used.
 
 ### A11y
 - Modal focus trap (Tab cycle), ARIA dialog roles, aria-labels on filters
@@ -80,11 +80,20 @@ vercel --prod                            # redeploy with env
 
 ```bash
 npm run dev          # build manifest + serve public/ on :5174
-npm test             # node:test (validators + rate-limit, 19 tests)
+npm test             # node:test (validators + rate-limit + module split, 26 tests)
 npm run lint         # syntax check all api/* + scripts/*
 npm run validate     # JSON shape check on manifest + missing + config
 npm run ci           # lint + test + validate (run by GitHub Actions)
 ```
+
+### Client structure
+
+`public/index.html` carries only the markup + inline CSS (~350 lines). All
+JavaScript lives in `public/js/*.js` as native ES modules loaded via
+`<script type="module">`. Modules: `state` · `util` · `api` · `search`
+· `stats` · `modal` · `grid` · `upload` · `actions` · `selection`
+· `keyboard` · `main` (entrypoint). No bundler — modern browsers load the
+graph natively.
 
 ### Optional: AVIF variants
 

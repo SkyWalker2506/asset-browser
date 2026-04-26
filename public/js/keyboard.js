@@ -1,0 +1,131 @@
+// Keyboard navigation + chords (g h/g t/g w/g d, d d). Single global keydown
+// listener; ignores keys while typing in form fields.
+
+import { store, selection, selectionMeta } from './state.js';
+import { toggleSelection, bulkDelete, clearSelection, selectionKey } from './selection.js';
+import { closeModal, closeHelp, openModal } from './modal.js';
+import { approvedAsAssets } from './grid.js';
+import { refreshSelectionUI } from './grid.js';
+
+function setFocusedCard(el) {
+  document.querySelectorAll('.focused').forEach(x => x.classList.remove('focused'));
+  if (el) {
+    el.classList.add('focused');
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    selectionMeta.focusedKey = selectionKey(el);
+  } else {
+    selectionMeta.focusedKey = null;
+  }
+}
+
+function navigateCards(delta) {
+  const all = Array.from(document.querySelectorAll('.card, .miss'));
+  if (!all.length) return;
+  const cur = selectionMeta.focusedKey
+    ? all.findIndex(e => selectionKey(e) === selectionMeta.focusedKey)
+    : -1;
+  const next = Math.max(0, Math.min(all.length - 1, (cur < 0 ? 0 : cur + delta)));
+  setFocusedCard(all[next]);
+}
+
+let _chord = '';
+let _chordTimer;
+function resetChord() { _chord = ''; clearTimeout(_chordTimer); }
+
+function renderForEsc() {
+  // Light import to avoid circular load chain on the hot path
+  import('./grid.js').then(({ render }) => render());
+}
+
+export function installKeyboard() {
+  document.addEventListener('keydown', e => {
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+
+    if (e.key === 'Escape') {
+      closeModal();
+      closeHelp();
+      if (selection.size) { clearSelection(); return; }
+      if (store.filter.q) {
+        document.getElementById('q').value = '';
+        store.filter.q = '';
+        renderForEsc();
+        return;
+      }
+      if (inField) e.target.blur();
+      resetChord();
+      return;
+    }
+
+    if (inField) return;
+
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      e.preventDefault();
+      document.querySelectorAll('.card, .miss').forEach(el => {
+        const k = selectionKey(el); if (k) selection.add(k);
+      });
+      refreshSelectionUI();
+      return;
+    }
+
+    switch (e.key) {
+      case '/':
+        e.preventDefault();
+        document.getElementById('q').focus();
+        document.getElementById('q').select();
+        resetChord(); return;
+      case '?': {
+        e.preventDefault();
+        const ov = document.getElementById('help-overlay');
+        ov.classList.toggle('open');
+        resetChord(); return;
+      }
+      case 'j':
+        e.preventDefault(); navigateCards(+1); resetChord(); return;
+      case 'k':
+        e.preventDefault(); navigateCards(-1); resetChord(); return;
+      case 'Enter':
+        if (selectionMeta.focusedKey) {
+          const el = document.getElementById(selectionMeta.focusedKey);
+          if (el?.classList.contains('card')) {
+            const txt = el.querySelector('.info .n')?.textContent || '';
+            const item = [...store.data.items, ...approvedAsAssets()].find(i => i.name === txt);
+            if (item) openModal(item.id);
+            e.preventDefault();
+          }
+        }
+        resetChord(); return;
+      case 'x':
+        if (selectionMeta.focusedKey) {
+          const el = document.getElementById(selectionMeta.focusedKey);
+          if (el) { toggleSelection(el); e.preventDefault(); }
+        }
+        resetChord(); return;
+      case 'g':
+      case 'd':
+        _chord = e.key;
+        clearTimeout(_chordTimer);
+        _chordTimer = setTimeout(resetChord, 800);
+        e.preventDefault();
+        return;
+    }
+
+    if (_chord === 'g') {
+      const map = { h: 'have', t: 'todo', w: 'waiting', d: 'denied' };
+      const target = map[e.key];
+      if (target) {
+        e.preventDefault();
+        const btn = document.querySelector(`.tab[data-tab="${target}"]`);
+        if (btn && btn.style.display !== 'none') btn.click();
+      }
+      resetChord();
+      return;
+    }
+    if (_chord === 'd' && e.key === 'd') {
+      e.preventDefault();
+      if (selection.size) bulkDelete();
+      resetChord();
+      return;
+    }
+    resetChord();
+  });
+}

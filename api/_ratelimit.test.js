@@ -3,11 +3,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   check,
+  checkAsync,
   clientIp,
   policyFor,
   applyRateLimit,
+  applyRateLimitAsync,
   _resetBuckets,
   _bucketCount,
+  _setKvClient,
+  _resetKvDetection,
 } from './_ratelimit.js';
 
 function fakeRes() {
@@ -142,4 +146,105 @@ test('bucket map grows but stays bounded', () => {
   // Push a small batch of distinct IPs
   for (let i = 0; i < 50; i++) check('upload', `10.99.${i}.1`);
   assert.ok(_bucketCount() >= 50);
+});
+
+// --- Shared-store (Vercel KV / Upstash Redis) path. Mock client implements
+// `incr` + `expire` to mirror the Upstash REST surface. We don't reach the
+// network — the dependency stays optional.
+
+function mockKv() {
+  const store = new Map();
+  const ttls = new Map();
+  return {
+    store,
+    ttls,
+    async incr(key) {
+      const v = (store.get(key) || 0) + 1;
+      store.set(key, v);
+      return v;
+    },
+    async expire(key, ttlSec) {
+      ttls.set(key, ttlSec);
+      return 1;
+    },
+  };
+}
+
+test('checkAsync uses KV client when set; honors policy and increments', async () => {
+  _resetBuckets();
+  _resetKvDetection();
+  const kv = mockKv();
+  _setKvClient(kv);
+  // 30/min on /upload — ten requests should pass and increment counter.
+  for (let i = 0; i < 10; i++) {
+    const r = await checkAsync('upload', '5.5.5.1');
+    assert.equal(r.allowed, true);
+    assert.equal(r.limit, 30);
+  }
+  // Counter increments under the right key shape: rl:upload:5.5.5.1:<windowStart>
+  const keys = [...kv.store.keys()];
+  assert.equal(keys.length, 1);
+  assert.match(keys[0], /^rl:upload:5\.5\.5\.1:\d+$/);
+  assert.equal(kv.store.get(keys[0]), 10);
+  // EXPIRE was set on first INCR.
+  assert.equal([...kv.ttls.keys()].length, 1);
+  _resetKvDetection();
+});
+
+test('checkAsync blocks when KV count exceeds policy limit', async () => {
+  _resetBuckets();
+  _resetKvDetection();
+  const kv = mockKv();
+  _setKvClient(kv);
+  // /clear is 10/min. Drain it.
+  for (let i = 0; i < 10; i++) {
+    const r = await checkAsync('clear', '5.5.5.2');
+    assert.equal(r.allowed, true);
+  }
+  // 11th must block.
+  const blocked = await checkAsync('clear', '5.5.5.2');
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.remaining, 0);
+  assert.ok(blocked.resetMs > 0);
+  _resetKvDetection();
+});
+
+test('checkAsync falls back to in-memory when KV throws', async () => {
+  _resetBuckets();
+  _resetKvDetection();
+  const kv = {
+    async incr() { throw new Error('network blip'); },
+    async expire() {},
+  };
+  _setKvClient(kv);
+  // Should silently fall back to in-memory token bucket.
+  const r = await checkAsync('upload', '5.5.5.3');
+  assert.equal(r.allowed, true);
+  assert.equal(r.limit, 30);
+  // In-memory bucket got the request.
+  assert.ok(_bucketCount() >= 1);
+  _resetKvDetection();
+});
+
+test('applyRateLimitAsync writes headers and 429 from KV path', async () => {
+  _resetBuckets();
+  _resetKvDetection();
+  const kv = mockKv();
+  _setKvClient(kv);
+  const req = fakeReq({ ip: '5.5.5.4', url: '/api/clear' });
+  // First 10 OK
+  for (let i = 0; i < 10; i++) {
+    const res = fakeRes();
+    const blocked = await applyRateLimitAsync(req, res, 'clear');
+    assert.equal(blocked, false);
+    assert.equal(res.headers['X-RateLimit-Limit'], '10');
+  }
+  // 11th blocked
+  const res2 = fakeRes();
+  const blocked = await applyRateLimitAsync(req, res2, 'clear');
+  assert.equal(blocked, true);
+  assert.equal(res2._statusCode, 429);
+  assert.ok(res2.headers['Retry-After']);
+  assert.match(res2._body.error, /rate limit/i);
+  _resetKvDetection();
 });

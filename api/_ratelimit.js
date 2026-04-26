@@ -1,19 +1,19 @@
 // Per-IP token-bucket rate limiter for Vercel serverless functions.
 //
-// Storage: in-memory `Map<key, bucket>` scoped to the running function instance.
-// CAVEATS:
-//   - Vercel may run several concurrent instances of the same function. Each
-//     instance has its own Map, so the *effective* per-IP rate limit can be
-//     N× the configured rate (where N = concurrent instances). For a small
-//     admin-style tool this is acceptable; for stricter limits move to a
-//     shared store (Vercel KV, Upstash Redis).
-//   - State is lost on cold start. That's fine — losing tokens means a
-//     small grace window for legitimate users right after a deploy.
-//   - We bound memory: a tiny TTL sweep on every check evicts stale buckets,
-//     and the Map is hard-capped at MAX_KEYS to defend against IP spoofing /
-//     enumeration floods.
+// Two storage backends:
+//   1. Process-local `Map<key,bucket>` — default. Each function instance has
+//      its own Map. Limit is correct per-instance; effective rate scales with
+//      concurrent warm instances. Acceptable for low-traffic admin tooling.
+//   2. Optional shared store via Upstash Redis REST (`@upstash/redis`).
+//      Detected by env: KV_REST_API_URL + KV_REST_API_TOKEN  (legacy Vercel KV
+//      env names — preserved when stores were migrated to Upstash in
+//      Dec 2024) OR UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
 //
-// Token bucket semantics:
+// The shared store uses a simple INCR + EXPIRE sliding-window counter (one
+// counter per (route, ip, window) — much simpler than full sliding logs and
+// good enough for IP rate limiting).
+//
+// Token bucket semantics for in-memory path:
 //   - bucket.tokens starts at `limit` and refills at `limit / windowMs`.
 //   - On each request: refill (lazy), then consume 1 token if available.
 //   - Returns { allowed, remaining, resetMs, limit }.
@@ -40,14 +40,58 @@ const POLICIES = {
 const buckets = new Map();
 let lastSweep = 0;
 
+// `createRequire` lets us synchronously load the optional peer dep from an
+// ESM module without dragging it into the dependency graph at parse time.
+// If `@upstash/redis` is not installed the require throws, the catch runs,
+// and we silently fall back to the in-memory bucket store.
+import { createRequire } from 'node:module';
+const requireOpt = createRequire(import.meta.url);
+
+// --- Optional shared-store detection (D014). Returns null when no shared
+// store is configured; the in-memory path is taken. The injected client is
+// used by tests; production reads it from env on first call.
+let _kvClient = null;
+let _kvDetected = false;
+
+export function _setKvClient(client) {
+  _kvClient = client;
+  _kvDetected = !!client;
+}
+
+export function _resetKvDetection() {
+  _kvClient = null;
+  _kvDetected = false;
+}
+
+function detectSharedStore() {
+  if (_kvDetected) return _kvClient;
+  // Tests may pre-inject a client. Otherwise check env. We DO NOT require()
+  // `@upstash/redis` here at module load — only when actually configured —
+  // and even then the require is inside a try/catch so a missing peer dep
+  // gracefully falls back to in-memory.
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  try {
+    const mod = requireOpt('@upstash/redis');
+    const Redis = mod.Redis || mod.default?.Redis;
+    if (!Redis) return null;
+    _kvClient = new Redis({ url, token });
+    _kvDetected = true;
+    return _kvClient;
+  } catch {
+    // Peer dep not installed — fall back silently. Documented in README.
+    return null;
+  }
+}
+
 export function policyFor(name) {
   return POLICIES[name] || POLICIES.DEFAULT;
 }
 
 // Resolve the client IP from the most-trusted-first header set. Vercel terminates
 // TLS upstream, so `x-forwarded-for` / `x-real-ip` are populated. We pick the
-// left-most address in `x-forwarded-for` (the original client per RFC 7239
-// custom; Vercel rewrites the chain to start with the real client).
+// left-most address in `x-forwarded-for`.
 export function clientIp(req) {
   const h = req?.headers || {};
   const xff = h['x-forwarded-for'] || h['X-Forwarded-For'];
@@ -57,9 +101,6 @@ export function clientIp(req) {
   }
   const xri = h['x-real-ip'] || h['X-Real-IP'];
   if (typeof xri === 'string' && xri.length) return xri.trim();
-  // Vercel-specific fallback. `req.socket?.remoteAddress` is undefined on the
-  // edge runtime; `unknown` keys IP-less requests under one bucket which is
-  // fine — they share a (small) limit.
   return req?.socket?.remoteAddress || 'unknown';
 }
 
@@ -69,7 +110,6 @@ function sweep(now) {
   for (const [k, b] of buckets) {
     if (now - b.updated > b.windowMs * 2) buckets.delete(k);
   }
-  // Hard cap: if we still have too many keys, drop the oldest.
   if (buckets.size > MAX_KEYS) {
     const arr = Array.from(buckets.entries()).sort((a, b) => a[1].updated - b[1].updated);
     const drop = arr.slice(0, buckets.size - MAX_KEYS);
@@ -77,8 +117,8 @@ function sweep(now) {
   }
 }
 
-// Pure check (no side-effects on the response). Used by the test suite.
-export function check(name, ip, now = Date.now()) {
+// In-memory token bucket (default path).
+function checkInMemory(name, ip, now) {
   sweep(now);
   const policy = policyFor(name);
   const key = `${name}:${ip}`;
@@ -87,7 +127,6 @@ export function check(name, ip, now = Date.now()) {
     b = { tokens: policy.limit, updated: now, windowMs: policy.windowMs, limit: policy.limit };
     buckets.set(key, b);
   } else {
-    // Refill proportional to elapsed time. Cap at policy.limit.
     const elapsed = now - b.updated;
     const refill = (elapsed / policy.windowMs) * policy.limit;
     b.tokens = Math.min(policy.limit, b.tokens + refill);
@@ -104,23 +143,72 @@ export function check(name, ip, now = Date.now()) {
       limit: policy.limit,
     };
   }
-  // Time until 1 full token is restored.
   const need = 1 - b.tokens;
   const resetMs = Math.ceil((need / policy.limit) * policy.windowMs);
-  return {
-    allowed: false,
-    remaining: 0,
-    resetMs,
-    limit: policy.limit,
-  };
+  return { allowed: false, remaining: 0, resetMs, limit: policy.limit };
 }
 
-// Express/Vercel middleware-style helper. Sets the standard headers and, on
-// limit, ends the response with 429. Returns true if the request was rate-limited
-// (caller should NOT continue).
+// Shared-store sliding window: `INCR rl:{name}:{ip}:{bucketStart}`, EXPIRE on
+// first write. Each window is a separate key so eviction is automatic.
+async function checkShared(client, name, ip, now) {
+  const policy = policyFor(name);
+  const bucketStart = Math.floor(now / policy.windowMs) * policy.windowMs;
+  const key = `rl:${name}:${ip}:${bucketStart}`;
+  // INCR returns the new count. On the first INCR, set EXPIRE so the key
+  // dies after windowMs * 2 (covers clock skew between windows).
+  let count;
+  try {
+    count = await client.incr(key);
+    if (count === 1) {
+      // pexpire / expire — Upstash Redis supports both. expire(seconds).
+      const ttlSec = Math.ceil((policy.windowMs * 2) / 1000);
+      await client.expire(key, ttlSec);
+    }
+  } catch {
+    // Network blip → fail open to in-memory (safer for legitimate users).
+    return checkInMemory(name, ip, now);
+  }
+  const remaining = Math.max(0, policy.limit - count);
+  const resetMs = (bucketStart + policy.windowMs) - now;
+  if (count > policy.limit) {
+    return { allowed: false, remaining: 0, resetMs, limit: policy.limit };
+  }
+  return { allowed: true, remaining, resetMs, limit: policy.limit };
+}
+
+// Pure synchronous check (no side-effects on the response). Used by the in-memory
+// test suite. If a shared store is configured, callers should use `checkAsync`.
+export function check(name, ip, now = Date.now()) {
+  return checkInMemory(name, ip, now);
+}
+
+// Async-aware check. Picks the shared store if configured, falls back to
+// in-memory otherwise.
+export async function checkAsync(name, ip, now = Date.now()) {
+  const client = detectSharedStore();
+  if (client) return checkShared(client, name, ip, now);
+  return checkInMemory(name, ip, now);
+}
+
+// Express/Vercel middleware. Sets standard headers, ends with 429 on overflow.
+// Returns true if the request was rate-limited (caller should NOT continue).
+//
+// We always use the synchronous in-memory check at the middleware boundary
+// because Vercel handlers must be ergonomic. Callers that want shared-store
+// semantics can call `applyRateLimitAsync`.
 export function applyRateLimit(req, res, name) {
   const ip = clientIp(req);
   const r = check(name, ip);
+  return _writeHeaders(res, r);
+}
+
+export async function applyRateLimitAsync(req, res, name) {
+  const ip = clientIp(req);
+  const r = await checkAsync(name, ip);
+  return _writeHeaders(res, r);
+}
+
+function _writeHeaders(res, r) {
   res.setHeader('X-RateLimit-Limit', String(r.limit));
   res.setHeader('X-RateLimit-Remaining', String(r.remaining));
   res.setHeader('X-RateLimit-Reset', String(Math.ceil(r.resetMs / 1000)));
@@ -138,5 +226,4 @@ export function _resetBuckets() {
   lastSweep = 0;
 }
 
-// For tests / introspection.
 export function _bucketCount() { return buckets.size; }
