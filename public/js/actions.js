@@ -1,12 +1,12 @@
-// Per-item actions: review/approve/deny/reopen, delete, clear, jumpTo,
-// asset deletion, and the 15-second undo recorder.
+
+
 
 import { store } from './state.js';
 import { toast, cssEsc } from './util.js';
 import { getAdminToken } from './api.js';
 import { load, loadTrash } from './main.js';
 
-// --- Undo (15-second window). Records the most recent destructive action.
+
 export function recordAction(action) {
   store.lastAction = { ...action, at: Date.now() };
   updateUndoButton();
@@ -83,7 +83,7 @@ export async function undoLastAction() {
   } catch (e) { toast('Undo: ' + e.message, 'err'); }
 }
 
-// --- Per-item actions
+
 export async function copyPrompt(name) {
   const i = store.missing.items.find(x => x.name === name);
   if (!i?.prompt) return toast('Prompt yok', 'err');
@@ -202,7 +202,7 @@ export function jumpToAsset(name) {
   document.querySelector('.tab[data-tab="have"]').click();
   document.getElementById('q').value = '';
   store.filter.q = '';
-  // dynamic import to avoid circular dep at module load time
+  
   import('./grid.js').then(({ render }) => {
     render();
     requestAnimationFrame(() => {
@@ -219,7 +219,7 @@ export function jumpToAsset(name) {
   });
 }
 
-// --- Trash list view + per-item restore/purge
+
 export async function restoreTrash(file) {
   try {
     const r = await fetch('/api/trash', {

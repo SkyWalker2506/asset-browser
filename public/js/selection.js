@@ -1,4 +1,4 @@
-// Bulk selection ops: toggle, range select, select-all, bulk delete/restore/clear.
+
 
 import { store, selection, selectionMeta } from './state.js';
 import { toast } from './util.js';
@@ -7,8 +7,8 @@ import { refreshSelectionUI, sourceDirFor, approvedAsAssets } from './grid.js';
 import { load, loadTrash } from './main.js';
 
 export function selectionKey(el) {
-  // .card uses asset name (id="asset-..."), .miss uses missing item name
-  // (id="miss-..."), trash uses id="trash-...".
+  
+  
   const id = el.id || '';
   if (id.startsWith('asset-') || id.startsWith('miss-') || id.startsWith('trash-')) return id;
   return null;
@@ -37,8 +37,8 @@ export function toggleSelection(el, opts = {}) {
   refreshSelectionUI();
 }
 
-// Resolve selection keys back to actionable item objects.
-function selectionItems() {
+
+export function selectionItems() {
   return Array.from(selection).map(k => {
     if (k.startsWith('asset-')) {
       const el = document.getElementById(k);

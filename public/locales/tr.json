@@ -59,6 +59,9 @@
     "upload_choose": "Dosyayı buraya sürükleyin",
     "upload_drop": "veya yapıştırın (Ctrl+V) · ya da",
     "upload_paste": "Yükle: {name}",
+    "upload_progress": "Yükleme: {current} / {total}",
+    "upload_queue_done": "Kuyruk tamamlandı",
+    "upload_queue_skip": "Atla ve Devam Et",
     "help_title": "Klavye Kısayolları",
     "asset_detail_aria_label": "Asset detayı"
   },
@@ -97,6 +100,37 @@
     "upload_done": "{name} yüklendi",
     "delete_done": "Silme tamamlandı",
     "selection_count": "{count} seçili"
+  },
+  "bulk_tags": {
+    "title": "Toplu Etiket Düzenleyici ({count} öğe)",
+    "common": "Ortak etiketler",
+    "some": "Bazı öğelerde olanlar",
+    "add_placeholder": "Yeni etiket ekle...",
+    "applied": "{count} öğe güncellendi"
+  },
+  "sprite": {
+    "preview_label": "Sprite önizleme",
+    "play": "Oynat",
+    "pause": "Duraklat",
+    "fps": "FPS",
+    "frame": "Kare"
+  },
+  "help": {
+    "title": "Klavye Kısayolları",
+    "focus_search": "Aramaya odaklan",
+    "esc_desc": "Modal kapat / seçimi temizle / aramayı sıfırla",
+    "help_desc": "Bu yardımı aç/kapat",
+    "nav_desc": "Grid içinde gezin",
+    "jk_desc": "Sonraki / önceki kart",
+    "enter_desc": "Odaklı kartı aç",
+    "x_desc": "Odaklı kartı seç/seçimden çıkar",
+    "shift_click_desc": "Aralık seç",
+    "select_all_desc": "Tümünü seç (görünür)",
+    "t_desc": "Seçilenler için toplu etiket düzenleyici",
+    "dd_desc": "Seçilenleri sil",
+    "admin_desc": "Admin modu aç/kapat",
+    "paste_desc": "Upload modal açıkken yapıştır + yükle",
+    "close_btn": "Tamam"
   },
   "lang": {
     "switcher_label": "Dil seçimi",

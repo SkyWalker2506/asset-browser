@@ -178,3 +178,17 @@ Append-only record of non-obvious technical choices.
 - **Neden:** Lighthouse needs a real Chrome — adds 200+ MB to install. CI already has perf via `scripts/perf-budget.mjs` (size-based). Lighthouse is the "deep dive" before a release; the budget gate is the "every commit" check. Combining them puts the deep dive on every commit which is wasteful for a small team.
 - **Alternatifler:** (a) `@lhci/cli` as devDep + GH Action — costs extra CI minutes for marginal post-fact info; (b) skip Lighthouse entirely — leaves a category gap in the analysis layer; (c) make Lighthouse `npm run perf:full` separate from `npm run perf` — hides the cost without addressing the dep weight.
 - **Etkisi:** Performance posture is auditable: budget gate stops bloat regressions, Lighthouse audit (manually run) scores cross-cutting metrics. Both live in the repo, neither is a build-time dep.
+
+## Run 19 — 2026-04-26
+
+### D027: Heavy feature modules MUST be lazy-loaded after Run 19
+- **Karar:** New JS modules whose user-flow is "open this specific dialog" or "preview this specific asset type" must be loaded via dynamic `import('./mod.js')` on first need, not eager-imported from main.js. Eager imports are reserved for shell modules required on every page load (state, api, grid, modal-shell, search, util, i18n, pwa, keyboard).
+- **Neden:** The 80 KB shell budget (D025) is at 79.09 KB after Run 19 (~99% utilization). Bulk tag editor (4.8 KB) and sprite preview (4.1 KB) had to be lazy or the budget breached. Future runs adding any feature ≥3 KB to public/js/ will breach unless they go lazy. Lazy-loading also gives a perf win — first-paint stays minimal, heavy code only downloads when the user invokes the feature.
+- **Alternatifler:** (a) Bump the budget — defers the conversation, eventually the bundle balloons; (b) Bundler with tree-shake — adds bundler dep, defeats Run 13 zero-dep architecture; (c) Inline everything — kills cache reuse and hurts first paint.
+- **Etkisi:** From now on, any new feature module is reviewed against the eager/lazy split: if the feature's median user touches it once per session, lazy. If every page render needs it, eager. Modal sprite preview = lazy (only fires on sprite-sheet assets). Bulk tag editor = lazy (only on `t` chord with selection). Future bulk operations follow the same rule.
+
+### D028: Server-side `/api/bulk-tags` endpoint instead of N parallel client patches
+- **Karar:** Added `api/bulk-tags.js` accepting `{names: [...], addTags: [...], removeTags: [...]}` in one POST. Mutates manifest-level tags in a single GitHub commit. Client calls this once instead of N parallel `/api/missing-patch` calls.
+- **Neden:** N parallel patches create N GitHub commits — noisy git log, N rate-limit consumption, race-condition window between patches if same asset is touched twice. Server-side bulk mutation is one commit, atomic, rate-limited as one operation.
+- **Alternatifler:** (a) N parallel client patches — works but commits floods, race-prone; (b) sequential client patches — slower (N × roundtrip); (c) GraphQL-style "mutate many" generic endpoint — overkill for one operation type.
+- **Etkisi:** Bulk tag editing on 50 assets = 1 commit, 1 rate-limit slot. Bulk tag failures roll back all-or-nothing because the manifest mutation is one write. Future bulk operations (bulk delete already exists, bulk move/category if added later) should follow the same single-endpoint pattern.

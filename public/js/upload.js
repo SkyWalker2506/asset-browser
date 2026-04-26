@@ -1,169 +1,87 @@
-// Upload modal: drag/drop + paste + click-to-browse with focus management.
-// Counter pattern (D010) keeps the drop-zone highlight stable as children fire
-// dragleave noise; paste handler is scoped to modal lifetime.
-
 import { store } from './state.js';
-import { toast, escapeHtml } from './util.js';
+import { toast } from './util.js';
 import { load, srStatus } from './main.js';
 import { t } from './i18n.js';
-
-const ACCEPT_MIME = ['image/png', 'image/webp', 'image/gif', 'image/jpeg'];
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
-
-// Sends one File object to /api/upload, returns the parsed response or throws.
-export async function performUpload(name, file) {
-  if (!ACCEPT_MIME.includes(file.type) && !/\.(png|webp|gif|jpe?g)$/i.test(file.name)) {
-    throw new Error(`Desteklenmeyen format: ${file.type || file.name}`);
+const AM = ['image/png', 'image/webp', 'image/gif', 'image/jpeg', 'image/avif'], MAX = 20*1024*1024;
+async function walk(e) {
+  const f = []; if (e.isFile) f.push(await new Promise((rs, rj) => e.file(rs, rj)));
+  else if (e.isDirectory) {
+    const r = e.createReader(), es = await new Promise((rs, rj) => r.readEntries(rs, rj));
+    for (const x of es) f.push(...(await walk(x)));
   }
-  if (file.size > MAX_UPLOAD_BYTES) throw new Error('20MB üstü kabul edilmiyor');
-  const dup = store.missing.items.find(i => i.uploadedFile === file.name && i.name !== name)
-    || store.data.items.find(i => i.file === file.name);
-  if (dup) {
-    const proceed = confirm(`"${file.name}" zaten kullanımda (${dup.name || dup.file}). Yine de yüklensin mi?`);
-    if (!proceed) throw new Error('İptal edildi');
-  }
-  const dataBase64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
-    reader.onerror = () => reject(new Error('dosya okunamadı'));
-    reader.readAsDataURL(file);
-  });
-  const r = await fetch('/api/upload', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, filename: file.name, dataBase64 }),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || 'upload failed');
-  return j;
+  return f;
 }
-
-// Drop-zone modal lifecycle. Single `_dropCleanup` closure ensures only one
-// modal is alive at a time, and that paste/keydown listeners are removed when
-// the modal closes (prevents Ctrl+V leaking into search inputs — D010).
-let _dropCleanup = null;
-
+export async function performUpload(name, file) {
+  if (!AM.includes(file.type) && !/\.(png|webp|gif|jpe?g|avif)$/i.test(file.name)) throw new Error(`Format: ${file.type || file.name}`);
+  if (file.size > MAX) throw new Error('20MB limit');
+  const dup = store.missing.items.find(i => i.uploadedFile === file.name && i.name !== name) || store.data.items.find(i => i.file === file.name);
+  if (dup && !confirm(`"${file.name}" kullanımda. Yine de?`)) throw new Error('İptal');
+  const b64 = await new Promise((rs, rj) => {
+    const r = new FileReader(); r.onload = () => rs(String(r.result).split(',')[1]); r.onerror = () => rj(new Error('error')); r.readAsDataURL(file);
+  });
+  const r = await fetch('/api/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, filename: file.name, dataBase64: b64 }) });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || 'failed'); return j;
+}
+let _dc = null;
 export function uploadFor(name) {
-  if (_dropCleanup) _dropCleanup();
-  let dropCounter = 0;
-  const overlay = document.createElement('div');
-  overlay.className = 'modal open';
-  overlay.id = 'upload-modal';
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-modal', 'true');
-  overlay.setAttribute('aria-label', t('modal.upload_paste', { name }));
-  overlay.style.zIndex = '250';
-  overlay.innerHTML = `
-    <div class="upload-box" tabindex="-1">
-      <button class="close" aria-label="${t('actions.close')}" data-close>×</button>
-      <h2 style="margin:0 0 6px;color:#d4a849;font-size:18px;">${t('modal.upload_paste', { name })}</h2>
-      <p style="margin:0 0 14px;color:#8b6b3d;font-size:12px;">PNG / WebP / GIF / JPEG · max 20 MB</p>
-      <div class="dropzone" id="dz" tabindex="0" role="button"
-           aria-label="${t('modal.upload_drop')}">
-        <div class="dz-icon" aria-hidden="true">⤓</div>
-        <div class="dz-title">${t('modal.upload_choose')}</div>
+  if (_dc) _dc();
+  let dc = 0; const ov = document.createElement('div');
+  ov.className = 'modal open'; ov.id = 'upload-modal'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+  ov.setAttribute('aria-label', t('modal.upload_paste', { name })); ov.style.zIndex = '250';
+  ov.innerHTML = `<div class="upload-box" tabindex="-1">
+      <button class="close" data-close>×</button>
+      <h2 style="margin:0 0 6px;color:#d4a849;font-size:18px" id="ut">${t('modal.upload_paste', { name })}</h2>
+      <p style="margin:0 0 14px;color:#8b6b3d;font-size:11px">PNG / WebP / GIF / JPEG / AVIF · max 20 MB</p>
+      <div class="dropzone" id="dz" tabindex="0" role="button" aria-label="${t('modal.upload_drop')}">
+        <div class="dz-icon">⤓</div><div class="dz-title">${t('modal.upload_choose')}</div>
         <div class="dz-sub">${t('modal.upload_drop')}</div>
         <button type="button" class="dz-browse" data-browse>${t('actions.browse')}</button>
-        <div class="dz-hint" id="dz-hint" aria-live="polite"></div>
+        <div class="dz-hint" id="dh" aria-live="polite"></div>
+      </div>
+      <div id="ua" style="margin-top:12px;display:none;justify-content:center">
+         <button type="button" class="dz-browse" id="us">${t('modal.queue_skip')}</button>
       </div>
     </div>`;
-  document.body.appendChild(overlay);
-  const dz = overlay.querySelector('#dz');
-  const hint = overlay.querySelector('#dz-hint');
-  const lastFocus = document.activeElement;
+  document.body.appendChild(ov);
+  const dz = ov.querySelector('#dz'), dh = ov.querySelector('#dh'), ut = ov.querySelector('#ut'), ua = ov.querySelector('#ua'), us = ov.querySelector('#us'), lf = document.activeElement;
   setTimeout(() => dz.focus(), 0);
-
-  const setHint = (msg, kind) => {
-    hint.textContent = msg || '';
-    hint.style.color = kind === 'err' ? '#c94d4d' : kind === 'ok' ? '#7abb7a' : '#8b6b3d';
-  };
-
-  const sendFiles = async (files) => {
-    const list = Array.from(files || []);
-    if (!list.length) return;
-    if (list.length > 1) setHint(t('status.uploading_multiple', { count: list.length }) || `${list.length} dosya · sırayla yükleniyor`, '');
-    let okCount = 0, failCount = 0;
-    for (const f of list) {
-      setHint(t('status.uploading', { name: f.name }), '');
-      try {
-        await performUpload(name, f);
-        okCount++;
-      } catch (e) {
-        failCount++;
-        setHint(t('status.failed', { error: e.message }), 'err');
+  const sh = (m, k) => { dh.textContent = m || ''; dh.style.color = k === 'err' ? '#c94d4d' : k === 'ok' ? '#7abb7a' : '#8b6b3d'; };
+  const sfs = async (fs) => {
+    let l = Array.from(fs || []); const count = l.length;
+    l = l.filter(f => AM.includes(f.type) || /\.(png|webp|gif|jpe?g|avif)$/i.test(f.name));
+    if (count > l.length) console.info(`Dropped ${count - l.length}`);
+    if (!l.length) return;
+    let ok = 0, fail = 0, skip = false; us.onclick = () => { skip = true; };
+    for (let i = 0; i < l.length; i++) {
+      ut.textContent = t('modal.upload_progress', { current: i + 1, total: l.length });
+      sh(t('status.uploading', { name: l[i].name }));
+      try { await performUpload(name, l[i]); ok++; }
+      catch (e) {
+        fail++; sh(e.message, 'err'); ua.style.display = 'flex';
+        while (!skip && _dc) await new Promise(r => setTimeout(r, 100));
+        if (!_dc) return; skip = false; ua.style.display = 'none';
       }
     }
-    if (okCount) {
-      toast(okCount === 1 ? (t('status.complete') || 'Yüklendi — waiting-for-review') : t('status.complete_multiple', { count: okCount }) || `${okCount} dosya yüklendi`);
-      if (okCount === 1 && list.length === 1) srStatus(t('sr.upload_done', { name: list[0].name }));
-      else srStatus(t('sr.upload_done', { name: okCount + ' files' }));
-      setTimeout(load, 600);
-    }
-    if (!failCount) cleanup();
+    if (ok) { toast(ok === 1 ? t('status.complete') : t('sr.upload_done', { name: ok + ' files' })); setTimeout(load, 600); }
+    if (!fail) cl(); else { ut.textContent = t('modal.upload_queue_done'); sh(t('status.complete'), 'ok'); }
   };
-
-  const browse = () => {
-    const inp = document.createElement('input');
-    inp.type = 'file';
-    inp.accept = ACCEPT_MIME.join(',');
-    inp.multiple = true;
-    inp.onchange = () => sendFiles(inp.files);
-    inp.click();
+  const br = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = AM.join(','); i.multiple = true; i.onchange = () => sfs(i.files); i.click(); };
+  const op = (e) => { if (!ov.parentNode) return; const i = e.clipboardData?.files || []; if (i.length) { e.preventDefault(); sfs(i); } };
+  const oen = (e) => { if (!e.dataTransfer?.types?.includes('Files')) return; e.preventDefault(); dc++; dz.classList.add('over'); };
+  const oov = (e) => { if (!e.dataTransfer?.types?.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; };
+  const olv = () => { dc = Math.max(0, dc - 1); if (dc === 0) dz.classList.remove('over'); };
+  const odr = async (e) => {
+    e.preventDefault(); dc = 0; dz.classList.remove('over');
+    const items = e.dataTransfer?.items;
+    if (items?.[0]?.webkitGetAsEntry) {
+      const f = []; for (const it of items) { const en = it.webkitGetAsEntry(); if (en) f.push(...(await walk(en))); }
+      sfs(f);
+    } else sfs(e.dataTransfer?.files);
   };
-
-  const onPaste = (e) => {
-    if (!overlay.parentNode) return;
-    const items = e.clipboardData?.files || [];
-    if (items.length) { e.preventDefault(); sendFiles(items); }
-  };
-  const onDragEnter = (e) => {
-    if (!e.dataTransfer?.types?.includes('Files')) return;
-    e.preventDefault();
-    dropCounter++;
-    dz.classList.add('over');
-  };
-  const onDragOver = (e) => {
-    if (!e.dataTransfer?.types?.includes('Files')) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  };
-  const onDragLeave = () => {
-    dropCounter = Math.max(0, dropCounter - 1);
-    if (dropCounter === 0) dz.classList.remove('over');
-  };
-  const onDrop = (e) => {
-    e.preventDefault();
-    dropCounter = 0;
-    dz.classList.remove('over');
-    sendFiles(e.dataTransfer?.files);
-  };
-  const onKey = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); cleanup(); return; }
-    if ((e.key === 'Enter' || e.key === ' ') && document.activeElement === dz) {
-      e.preventDefault(); browse();
-    }
-  };
-  const onClick = (e) => {
-    if (e.target.matches('[data-close]') || e.target === overlay) cleanup();
-    else if (e.target.matches('[data-browse]')) browse();
-    else if (e.target.closest('#dz') && !e.target.matches('[data-browse]')) browse();
-  };
-
-  dz.addEventListener('dragenter', onDragEnter);
-  dz.addEventListener('dragover', onDragOver);
-  dz.addEventListener('dragleave', onDragLeave);
-  dz.addEventListener('drop', onDrop);
-  overlay.addEventListener('click', onClick);
-  document.addEventListener('keydown', onKey);
-  document.addEventListener('paste', onPaste);
-
-  function cleanup() {
-    document.removeEventListener('keydown', onKey);
-    document.removeEventListener('paste', onPaste);
-    overlay.remove();
-    dropCounter = 0;
-    _dropCleanup = null;
-    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
-  }
-  _dropCleanup = cleanup;
+  const ok = (e) => { if (e.key === 'Escape') { e.preventDefault(); cl(); } else if ((e.key === 'Enter' || e.key === ' ') && document.activeElement === dz) { e.preventDefault(); br(); } };
+  const ocl = (e) => { if (e.target.matches('[data-close]') || e.target === ov) cl(); else if (e.target.closest('#dz') || e.target.matches('[data-browse]')) br(); };
+  dz.addEventListener('dragenter', oen); dz.addEventListener('dragover', oov); dz.addEventListener('dragleave', olv); dz.addEventListener('drop', odr);
+  ov.addEventListener('click', ocl); document.addEventListener('keydown', ok); document.addEventListener('paste', op);
+  function cl() { document.removeEventListener('keydown', ok); document.removeEventListener('paste', op); ov.remove(); dc = 0; _dc = null; if (lf && document.body.contains(lf)) lf.focus(); }
+  _dc = cl;
 }

@@ -1,5 +1,5 @@
-// Keyboard navigation + chords (g h/g t/g w/g d, d d). Single global keydown
-// listener; ignores keys while typing in form fields.
+
+
 
 import { store, selection, selectionMeta } from './state.js';
 import { toggleSelection, bulkDelete, clearSelection, selectionKey } from './selection.js';
@@ -55,7 +55,7 @@ let _chordTimer;
 function resetChord() { _chord = ''; clearTimeout(_chordTimer); }
 
 function renderForEsc() {
-  // Light import to avoid circular load chain on the hot path
+  
   import('./grid.js').then(({ render }) => render());
 }
 
@@ -159,6 +159,12 @@ export function installKeyboard() {
         if (selectionMeta.focusedKey) {
           const el = document.getElementById(selectionMeta.focusedKey);
           if (el) { toggleSelection(el); e.preventDefault(); }
+        }
+        resetChord(); return;
+      case 't':
+        if (selection.size >= 1) {
+          e.preventDefault();
+          import('./bulk-tags.js').then(m => m.openBulkTagEditor());
         }
         resetChord(); return;
       case 'g':

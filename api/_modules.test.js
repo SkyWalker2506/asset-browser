@@ -25,6 +25,8 @@ const EXPECTED_MODULES = [
   'selection.js',
   'keyboard.js',
   'main.js',
+  'bulk-tags.js',
+  'sprite-preview.js',
 ];
 
 test('all expected modules exist and parse', () => {

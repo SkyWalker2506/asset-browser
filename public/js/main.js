@@ -1,6 +1,6 @@
-// Application entrypoint. Wires modules, loads initial data, and exposes
-// the inline-onclick API surface (window.openModal etc.) used by render
-// templates that emit `onclick="foo(...)"` strings.
+
+
+
 
 import { store, setSortMode, selection } from './state.js';
 import { escapeHtml, fmtSize, toast } from './util.js';
@@ -59,7 +59,7 @@ export function srStatus(msg) {
   }, 200);
 }
 
-// --- Boot
+
 export async function load() {
   const lang = getLang();
   await loadLocale(lang);
@@ -80,7 +80,7 @@ export async function load() {
   store.config = c;
   updateTabVisibility();
   refreshAdminBadge();
-  // Public trash count probe — also feeds stats panel queue badge.
+  
   fetchJson('/api/trash').then(t => {
     const count = (t.files || []).filter(f => !f.name.endsWith('.meta.json')).length;
     store.trashCountCache = count;
@@ -135,16 +135,16 @@ window.addEventListener('i18n:change', e => {
   render();
 });
 
-// Lang switcher click
+
 document.getElementById('lang-switcher').addEventListener('click', e => {
   const btn = e.target.closest('.lang-btn');
   if (btn) setLang(btn.dataset.lang);
 });
 
-// --- Wire DOM events. We do this once on module load (DOM is parsed before
-// the deferred `<script type="module">` executes).
 
-// Tabs
+
+
+
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
@@ -161,7 +161,7 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   render();
 });
 
-// Filter/Sort inputs delegation
+
 document.body.addEventListener('input', e => {
   if (e.target.id === 'q') {
     store.filter.q = e.target.value;
@@ -189,10 +189,10 @@ document.body.addEventListener('change', e => {
   }
 });
 
-// Initial sort value
+
 document.getElementById('sort').value = store.sortMode;
 
-// Action delegation (Bulk actions + Save filter)
+
 const actionMap = {
   'save-filter': () => saveCurrentAsFilter(),
   'bulk-cancel': clearSelection,
@@ -208,8 +208,8 @@ document.body.addEventListener('click', e => {
   }
 });
 
-// Card click → toggle selection (with shift for range) when in selection mode.
-// Single click without selection mode opens the modal (via the `<div class=thumb>`'s onclick).
+
+
 document.getElementById('grid').addEventListener('click', e => {
   const card = e.target.closest('.card, .miss');
   if (!card) return;
@@ -227,7 +227,7 @@ document.getElementById('grid').addEventListener('click', e => {
   }
 }, true);
 
-// Ctrl+Shift+T → admin token prompt
+
 document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.shiftKey && e.key === 'T') {
     e.preventDefault();
@@ -251,7 +251,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Admin badge click → quick logout
+
 document.getElementById('admin-badge').addEventListener('click', () => {
   const tr = getLang() === 'tr';
   const tConfirm = tr ? 'Admin moddan çıkılsın mı?' : 'Logout from admin mode?';
@@ -263,27 +263,27 @@ document.getElementById('admin-badge').addEventListener('click', () => {
   }
 });
 
-// Keyboard chords (j/k, g h/t/w/d, d d, ?, /, x, Enter, Esc, Ctrl+A)
+
 installKeyboard();
 
-// Undo button auto-fade tick
+
 setInterval(updateUndoButton, 1000);
 
-// --- Expose inline-handler API surface. Render templates emit
-// `onclick="reviewAction('foo','approve')"` so these need to be window-scoped.
-// Modules stay private (not on window); only this list is the contract.
+
+
+
 Object.assign(window, {
-  // modal
+  
   openModal, closeModal, closeHelp,
-  // saved filters
+  
   saveCurrentAsFilter, applySavedFilter, removeSavedFilter,
-  // per-item
+  
   copyPrompt, uploadFor, reviewAction, deleteUpload,
   jumpToAsset, clearEntry, unapproveAsset, deleteAsset,
   restoreTrash, purgeTrash,
-  // undo
+  
   undoLastAction,
 });
 
-// --- Kick off
+
 load();

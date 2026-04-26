@@ -1,6 +1,6 @@
-// Grid renderer + IntersectionObserver for image lazy-load and animation
-// parking. Also exposes itemsForTab/approvedAsAssets which are used by other
-// modules (stats, modal, keyboard navigation).
+
+
+
 
 import { store } from './state.js';
 import { escapeHtml, cssEsc, fmtSize, toast } from './util.js';
@@ -15,7 +15,7 @@ import { renderStats } from './stats.js';
 import { selection } from './state.js';
 import { t } from './i18n.js';
 
-// --- Source dir resolution for assets (used by delete/upload paths)
+
 export function sourceDirFor(item) {
   if (!store.config) return '';
   const src = item.src || '';
@@ -30,7 +30,7 @@ const STATUS_FOR_TAB = {
   denied: s => s === 'denied',
 };
 
-// Synthetic manifest entries for approved items so they show up in "Mevcut".
+
 export function approvedAsAssets() {
   return store.missing.items.filter(i => i.status === 'approved' && i.uploadedFile).map(i => ({
     id: `approved-${i.name}`,
@@ -82,8 +82,8 @@ export function updateMeta() {
   }
 }
 
-// --- IntersectionObserver: defer image src until card enters viewport.
-// Pauses sprite animations when card leaves viewport (saves CPU on big lists).
+
+
 const _io = new IntersectionObserver((entries) => {
   for (const entry of entries) {
     const card = entry.target;
@@ -91,7 +91,7 @@ const _io = new IntersectionObserver((entries) => {
       card.removeAttribute('data-pending');
       const img = card.querySelector('img[data-src]');
       if (img) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
-      // <picture><source data-srcset="..."> → lift to srcset on first paint.
+      
       for (const src of card.querySelectorAll('picture > source[data-srcset]')) {
         src.srcset = src.dataset.srcset;
         src.removeAttribute('data-srcset');
@@ -115,7 +115,7 @@ export function observeCards() {
   document.querySelectorAll('.grid .card[data-pending], .grid .card').forEach(c => _io.observe(c));
 }
 
-// --- Chip + select builders
+
 function chip(label, value) {
   const e = document.createElement('div');
   e.className = 'chip'; e.textContent = label; e.dataset.v = value;
@@ -159,7 +159,7 @@ export function buildCatSelect() {
   fillSelect('ext', [...new Set(store.data.items.map(i => i.ext))].sort().map(e => e.toUpperCase()));
 }
 
-// --- Saved filters chips bar
+
 export function renderSavedFilters() {
   const c = document.getElementById('saved-filters');
   if (!c) return;
@@ -214,7 +214,7 @@ export function removeSavedFilter(id) {
   renderSavedFilters();
 }
 
-// --- Selection UI sync (called after render and on selection change)
+
 export function refreshSelectionUI() {
   document.body.classList.toggle('has-selection', selection.size > 0);
   const countEl = document.getElementById('bulk-count');
@@ -244,7 +244,7 @@ export function refreshSelectionUI() {
   });
 }
 
-// --- Main grid render
+
 export function render() {
   const g = document.getElementById('grid');
   const parsed = parseSmartQuery(store.filter.q);
@@ -316,9 +316,9 @@ export function render() {
   renderStats(filtered.length);
   if (!filtered.length) { g.innerHTML = `<div class="empty" data-i18n="status.empty_matches">${t('status.empty_matches')}</div>`; return; }
   g.innerHTML = filtered.map(i => {
-    // Default: deferred-load img (data-src lifted to src on viewport intersection).
-    // When manifest carries an AVIF variant, wrap in <picture> for browsers that
-    // support it; older browsers transparently fall back to the data-src <img>.
+    
+    
+    
     let thumbInner = i.avifSrc
       ? `<picture><source type="image/avif" data-srcset="${i.avifSrc}"><img data-src="${i.src}" alt="${i.name}" decoding="async" width="160" height="160"></picture>`
       : `<img data-src="${i.src}" alt="${i.name}" decoding="async" width="160" height="160">`;

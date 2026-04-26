@@ -1,5 +1,4 @@
-// Asset detail modal: focus trap (D-keep), <picture>+AVIF preview, sprite-anim
-// playback for animation strips.
+// Asset detail modal: focus trap (D-keep), <picture>+AVIF preview.
 
 import { store } from './state.js';
 import { fmtSize } from './util.js';
@@ -36,30 +35,17 @@ function trapFocusOff(modalEl) {
 // `approvedAsAssets` is imported lazily via grid.js to avoid a circular import.
 import { approvedAsAssets } from './grid.js';
 
+let _modalCleanup = null;
+
 export function openModal(id) {
+  if (_modalCleanup) _modalCleanup();
+  _modalCleanup = null;
   const i = store.data.items.find(x => x.id === id) || approvedAsAssets().find(x => x.id === id);
   if (!i) return;
-  let previewInner = i.avifSrc
+  const previewInner = i.avifSrc
     ? `<picture><source type="image/avif" srcset="${i.avifSrc}"><img src="${i.src}"></picture>`
     : `<img src="${i.src}">`;
-  if (i.type === 'Animasyon' && i.dim) {
-    const m = i.dim.match(/^(\d+)x(\d+)$/);
-    const nameFrames = (i.name.match(/_(\d+)f/i) || [])[1];
-    if (m) {
-      const w = +m[1], h = +m[2];
-      const frames = nameFrames ? +nameFrames : (w > h ? Math.round(w / h) : 1);
-      if (frames > 1 && w / h === frames) {
-        const size = 256, endX = -((frames - 1) * size), dur = (frames / 8).toFixed(2);
-        previewInner = `
-          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
-            <div style="font-size:11px;color:#8b6b3d;">Oyun içi görünüm (${frames} frame @ 8 FPS)</div>
-            <div style="width:${size}px;height:${size}px;background-image:url('${i.src}');background-repeat:no-repeat;background-size:auto 100%;animation:sprite-play ${dur}s steps(${frames - 1}) infinite;--end:${endX}px;image-rendering:-webkit-optimize-contrast;"></div>
-            <div style="font-size:11px;color:#8b6b3d;">Ham strip:</div>
-            <img src="${i.src}" style="max-width:100%;">
-          </div>`;
-      }
-    }
-  }
+
   document.getElementById('box').innerHTML = `
     <div class="preview">${previewInner}</div>
     <div class="details">
@@ -80,9 +66,19 @@ export function openModal(id) {
   modalEl.setAttribute('aria-label', t('modal.asset_detail_aria_label'));
   modalEl.classList.add('open');
   trapFocusOn(modalEl);
+
+  const [w, h] = (i.dim || '0x0').split('x').map(Number);
+  const isSprite = i.frames || i.name.includes('_sheet') || (i.cols && i.rows) || (w > h && w % h === 0 && w / h > 1);
+  if (isSprite) {
+    import('./sprite-preview.js').then(m => {
+      _modalCleanup = m.attachSpritePreview(document.getElementById('box'), i);
+    });
+  }
 }
 
 export function closeModal() {
+  if (_modalCleanup) _modalCleanup();
+  _modalCleanup = null;
   const modalEl = document.getElementById('modal');
   if (modalEl.classList.contains('open')) trapFocusOff(modalEl);
   modalEl.classList.remove('open');

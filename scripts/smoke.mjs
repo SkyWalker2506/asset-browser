@@ -115,6 +115,16 @@ async function runTests(port) {
       expectedStatus: 200
     },
     {
+      path: '/js/bulk-tags.js',
+      expectedStatus: 200,
+      checks: [{ type: 'contains', value: 'export' }]
+    },
+    {
+      path: '/js/sprite-preview.js',
+      expectedStatus: 200,
+      checks: [{ type: 'contains', value: 'export' }]
+    },
+    {
       path: '/nonexistent-file',
       expectedStatus: 404
     }

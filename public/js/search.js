@@ -22,9 +22,9 @@ export function parseSmartQuery(q) {
   return out;
 }
 
-// Derive tags from filename + dim heuristics. No backend storage needed; pure.
+// Derive tags from filename + dim heuristics + manual tags.
 export function autoTags(item) {
-  const tags = new Set();
+  const tags = new Set(item.tags || []);
   const name = (item.name || '').toLowerCase();
   const file = (item.file || item.uploadedFile || '').toLowerCase();
   const dim = item.dim || '';
