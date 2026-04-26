@@ -6,3 +6,5 @@
 */public/missing.json
 */public/config.json
 forge/
+audit.log
+audit.log.*

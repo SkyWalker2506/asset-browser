@@ -136,5 +136,9 @@
     "switcher_label": "Dil seçimi",
     "tr": "TR",
     "en": "EN"
+  },
+  "trash": {
+    "expires_in": "{days} gün içinde silinecek",
+    "auto_purge_warning": "Çöp kutusundaki öğeler 30 gün sonra otomatik olarak temizlenir."
   }
 }

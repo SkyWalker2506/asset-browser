@@ -1,7 +1,8 @@
 // POST /api/bulk-tags { names: [], addTags: [], removeTags: [] }
 import { handler, validateName, requireFields } from './_handler.js';
+import { auditLog } from './_audit.js';
 
-export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh }) => {
+export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh, ip_hash }) => {
   const err = requireFields(body, ['names', 'addTags', 'removeTags']);
   if (err) return res.status(400).json({ error: err });
   if (!Array.isArray(body.names) || !Array.isArray(body.addTags) || !Array.isArray(body.removeTags)) {
@@ -49,6 +50,8 @@ export default handler({ method: 'POST' }, async ({ res, token, config, branch, 
       },
     });
   }
+
+  auditLog('bulk_tags.apply', { count: body.names.length, addTags: body.addTags, removeTags: body.removeTags, ip_hash });
 
   res.json({ ok: true, changed });
 });

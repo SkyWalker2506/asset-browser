@@ -1,8 +1,9 @@
 import { handler, validateName, validateFilename, base64ByteLength, requireFields } from './_handler.js';
+import { auditLog } from './_audit.js';
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB binary, aligned with client-side check
 
-export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh }) => {
+export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh, ip_hash }) => {
   const err = requireFields(body, ['name', 'filename', 'dataBase64']);
   if (err) return res.status(400).json({ error: err });
   if (!validateName(body.name)) return res.status(400).json({ error: 'invalid name' });
@@ -37,6 +38,8 @@ export default handler({ method: 'POST' }, async ({ res, token, config, branch, 
       sha: miss.sha, branch,
     },
   });
+
+  auditLog('asset.upload', { name: body.name, size, ip_hash });
 
   res.json({ ok: true, name: body.name, filename: body.filename, size });
 });

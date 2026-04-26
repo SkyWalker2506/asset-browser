@@ -1,21 +1,49 @@
 // GET /api/trash — list trash files (public; metadata stripped)
 // POST /api/trash { action: 'restore'|'purge', file } — restore to runtime or hard-delete (purge admin-only)
 import { handler, validateFilename, isAdmin, requireFields } from './_handler.js';
+import { auditLog } from './_audit.js';
+import { sweepExpiredTrash } from './_trash-util.js';
 
 export default async function (req, res) {
   // Multi-method endpoint: GET for list, POST for actions. Wrap manually.
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'GET or POST' });
   }
-  return handler({ method: req.method }, async ({ token, config, branch, body, paths, gh }) => {
+  return handler({ method: req.method }, async ({ token, config, branch, body, paths, gh, ip_hash }) => {
+    const retentionDays = parseInt(process.env.TRASH_RETENTION_DAYS || '30', 10);
+
     if (req.method === 'GET') {
+      // Lazy sweep
+      await sweepExpiredTrash({ token, config, branch, paths, maxAgeDays: retentionDays });
+
       let files = [];
       try {
         const list = await gh(token, paths.trashDir, { ref: branch, github: config.github });
-        // Public list: only filename + size + sha. NO meta filename, NO origin path.
-        files = (Array.isArray(list) ? list : [])
-          .filter(f => !f.name.endsWith('.meta.json'))
-          .map(f => ({ name: f.name, size: f.size, sha: f.sha }));
+        const now = Date.now();
+        
+        // We need meta for expires_in_days
+        const allItems = Array.isArray(list) ? list : [];
+        const metaFiles = allItems.filter(f => f.name.endsWith('.meta.json'));
+        const fileItems = allItems.filter(f => !f.name.endsWith('.meta.json'));
+
+        for (const f of fileItems) {
+          const metaName = f.name.replace(/\.[^.]+$/, '') + '.meta.json';
+          const mf = metaFiles.find(m => m.name === metaName);
+          let expires_in_days = retentionDays;
+          
+          if (mf) {
+            try {
+              const mr = await gh(token, mf.path, { ref: branch, github: config.github });
+              const meta = JSON.parse(Buffer.from(mr.content, 'base64').toString());
+              if (meta.deletedAt) {
+                const ageMs = now - new Date(meta.deletedAt).getTime();
+                expires_in_days = Math.max(0, retentionDays - (ageMs / 86400000));
+              }
+            } catch {}
+          }
+          
+          files.push({ name: f.name, size: f.size, sha: f.sha, expires_in_days });
+        }
       } catch {}
       res.setHeader('Cache-Control', 'no-store');
       return res.json({ ok: true, files });
@@ -99,6 +127,9 @@ export default async function (req, res) {
         body: { message: `trash meta cleanup`, sha: m2.sha, branch },
       });
     } catch {}
+
+    auditLog('trash.restore', { name: body.file, ip_hash });
+
     return res.json({ ok: true, restored: restorePath });
   })(req, res);
 }

@@ -192,3 +192,23 @@ Append-only record of non-obvious technical choices.
 - **Neden:** N parallel patches create N GitHub commits — noisy git log, N rate-limit consumption, race-condition window between patches if same asset is touched twice. Server-side bulk mutation is one commit, atomic, rate-limited as one operation.
 - **Alternatifler:** (a) N parallel client patches — works but commits floods, race-prone; (b) sequential client patches — slower (N × roundtrip); (c) GraphQL-style "mutate many" generic endpoint — overkill for one operation type.
 - **Etkisi:** Bulk tag editing on 50 assets = 1 commit, 1 rate-limit slot. Bulk tag failures roll back all-or-nothing because the manifest mutation is one write. Future bulk operations (bulk delete already exists, bulk move/category if added later) should follow the same single-endpoint pattern.
+
+## Run 20 — 2026-04-26
+
+### D029: Audit log = local NDJSON file, not committed, rotated at 10 MB
+- **Karar:** `audit.log` is appended in repo root via fs.appendFile, gitignored. NDJSON one-line-per-action format. Auto-rotate when file exceeds 10 MB (rename to audit.log.1 + start fresh).
+- **Neden:** External log services (Sentry, Datadog) cost money and add deploy-time deps. Local NDJSON is grep-able and tail-able, instantly diagnose-able. Keeping it local-only means admin-action history doesn't leak into git history (PRs would expose ip_hashes if committed). The 10 MB cap means even a chatty year stays bounded.
+- **Alternatifler:** (a) GitHub commit log as audit trail — already happens for mutations, but mixes ops with code; (b) external service — costs $; (c) commit audit.log to repo — leaks operational metadata, large diffs.
+- **Etkisi:** Admins inspect via `tail -100 audit.log` or `GET /api/audit?limit=N&since=ISO`. Rotation keeps the file size predictable. Aggregating across instances would need ship-to-cloud — not done here.
+
+### D030: Trash retention via lazy sweep on GET, not cron
+- **Karar:** `sweepExpiredTrash()` runs at the start of every `GET /api/trash`. Items with `deletedAt` older than `TRASH_RETENTION_DAYS` (default 30) are deleted along with their meta sidecar. Each purge is audit-logged.
+- **Neden:** Vercel cron costs extra and adds platform coupling. The trash list is only meaningful to admins, who look at it when they want to recover something — exactly when stale entries should already be gone. Sweep cost = walk N meta files + parse + Date.compare; cheap even at N=1000.
+- **Alternatifler:** (a) Vercel cron job — works, costs $$, platform-coupled; (b) manual purge button — error-prone, retention guarantee lost; (c) sweep on every API call — overkill.
+- **Etkisi:** A trash item's max lifespan is `30 days + (time-until-next-trash-list-call)`. For active deployments this is effectively 30 days. For dormant deployments items linger until the next admin visit — fine because dormant deployments don't accumulate either way.
+
+### D031: Restore is dry-run by default; ?confirm=1 actually applies
+- **Karar:** `POST /api/restore` returns `{would_apply: {missing_to_add: N, missing_to_remove: M}}` without writing. Adding `?confirm=1` triggers the atomic temp-write + rename.
+- **Neden:** Restore is destructive — overwrites missing.json. A typo in the URL or accidental double-submit would silently destroy current state. Dry-run-by-default makes the operator see the diff first. The `?confirm=1` opt-in is one keystroke for legitimate use, blocks accidental destruction.
+- **Alternatifler:** (a) Apply by default — destructive; (b) two-step "submit then confirm" — extra UI; (c) require `?dryRun=0` instead of `?confirm=1` — same effect, but `?confirm=1` reads naturally as intentional opt-in.
+- **Etkisi:** Both human admins and any future scripted restore must explicitly pass `?confirm=1`. CI/CD scripts that do this should also set `?confirm=1` (standard pattern, not undocumented).

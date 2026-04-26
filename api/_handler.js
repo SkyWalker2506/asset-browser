@@ -139,7 +139,7 @@ export function handler(opts, fn) {
       const branch = config.github.branch || 'main';
       const body = parseBody(req);
       const paths = getPaths(config);
-      return await fn({ req, res, token, config, branch, body, paths, gh });
+      return await fn({ req, res, token, config, branch, body, paths, gh, ip_hash });
     } catch (e) {
       const msg = String(e?.message || e || 'unknown');
       log('error', 'api.error', { error: msg, stack: e.stack?.slice(0, 500), route, ip_hash });

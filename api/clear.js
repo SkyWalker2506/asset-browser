@@ -1,7 +1,8 @@
 // POST /api/clear { name } — remove an entry from missing.json (asset stays in runtime)
 import { handler, validateName, requireFields } from './_handler.js';
+import { auditLog } from './_audit.js';
 
-export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh }) => {
+export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh, ip_hash }) => {
   const err = requireFields(body, ['name']);
   if (err) return res.status(400).json({ error: err });
   if (!validateName(body.name)) return res.status(400).json({ error: 'invalid name' });
@@ -21,6 +22,8 @@ export default handler({ method: 'POST' }, async ({ res, token, config, branch, 
       sha: miss.sha, branch,
     },
   });
+
+  auditLog('trash.clear', { count: 1, ip_hash });
 
   res.json({ ok: true });
 });

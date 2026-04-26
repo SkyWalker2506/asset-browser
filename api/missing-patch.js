@@ -1,6 +1,7 @@
 // POST /api/missing-patch { name, patch } — patch specific fields of a missing item
 // Allowed fields: status, uploadedFile, denyReason
 import { handler, validateName, validateFilename, requireFields } from './_handler.js';
+import { auditLog } from './_audit.js';
 
 const ALLOWED_STATUS = ['todo', 'in-progress', 'waiting-for-review', 'approved', 'denied', 'blocked'];
 const PATCH_FIELDS = {
@@ -9,7 +10,7 @@ const PATCH_FIELDS = {
   denyReason: v => v === null || (typeof v === 'string' && v.length <= 500),
 };
 
-export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh }) => {
+export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh, ip_hash }) => {
   const err = requireFields(body, ['name', 'patch']);
   if (err) return res.status(400).json({ error: err });
   if (!validateName(body.name)) return res.status(400).json({ error: 'invalid name' });
@@ -40,6 +41,8 @@ export default handler({ method: 'POST' }, async ({ res, token, config, branch, 
       sha: miss.sha, branch,
     },
   });
+
+  auditLog('missing.patch', { name: body.name, ip_hash });
 
   res.json({ ok: true });
 });

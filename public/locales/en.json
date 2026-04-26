@@ -136,5 +136,9 @@
     "switcher_label": "Language selection",
     "tr": "TR",
     "en": "EN"
+  },
+  "trash": {
+    "expires_in": "Expires in {days} days",
+    "auto_purge_warning": "Trash items are auto-purged after 30 days."
   }
 }

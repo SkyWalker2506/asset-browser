@@ -1,7 +1,8 @@
 import { handler, validateName, requireFields } from './_handler.js';
 import { moveToTrash } from './_trash-util.js';
+import { auditLog } from './_audit.js';
 
-export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh }) => {
+export default handler({ method: 'POST' }, async ({ res, token, config, branch, body, paths, gh, ip_hash }) => {
   const err = requireFields(body, ['name']);
   if (err) return res.status(400).json({ error: err });
   if (!validateName(body.name)) return res.status(400).json({ error: 'invalid name' });
@@ -41,6 +42,11 @@ export default handler({ method: 'POST' }, async ({ res, token, config, branch, 
       sha: miss.sha, branch,
     },
   });
+
+  const runtimeDir = (config.sources || []).find(s => /in.?game|runtime/i.test(s.category || ''))?.dir
+    || (config.sources || [])[0]?.dir;
+
+  auditLog('asset.delete', { name: body.name, originDir: runtimeDir, ip_hash });
 
   res.json({ ok: true });
 });

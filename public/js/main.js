@@ -109,11 +109,18 @@ export async function loadTrash() {
     const g = document.getElementById('grid');
     const visibleFiles = j.files.filter(f => !f.name.endsWith('.meta.json'));
     if (!visibleFiles.length) { g.innerHTML = `<div class="empty" data-i18n="status.empty_trash">${t('status.empty_trash')}</div>`; return; }
-    g.innerHTML = visibleFiles.map(f => `
+    
+    const warning = `<div class="trash-warning" style="grid-column:1/-1;padding:10px;background:#3a2d1d;color:#d4b38c;border-radius:4px;margin-bottom:10px;font-size:13px;" data-i18n="trash.auto_purge_warning">${t('trash.auto_purge_warning')}</div>`;
+
+    g.innerHTML = warning + visibleFiles.map(f => {
+      const days = Math.ceil(f.expires_in_days || 0);
+      const expires = `<div class="expires" style="font-size:11px;color:#8a7d6d;margin-top:4px;">${t('trash.expires_in', { days })}</div>`;
+      return `
       <div class="miss" id="trash-${escapeHtml(f.name)}" data-name="${escapeHtml(f.name)}" tabindex="-1">
         <span class="select-checkbox" role="checkbox" aria-label="${t('actions.select')}" tabindex="0"></span>
         <h3>${f.name}</h3>
         <div class="notes">${fmtSize(f.size)}</div>
+        ${expires}
         <div class="actions">
           <button class="btn primary" onclick="restoreTrash(${JSON.stringify(f.name).replace(/"/g, '&quot;')})" data-i18n="actions.restore">${t('actions.restore')}</button>
           ${isAdmin ? `<button class="btn danger" onclick="purgeTrash(${JSON.stringify(f.name).replace(/"/g, '&quot;')})" data-i18n="actions.delete">${t('actions.delete')}</button>` : ''}
@@ -132,7 +139,8 @@ function updateLangSwitcherUI(lang) {
 window.addEventListener('i18n:change', e => {
   updateLangSwitcherUI(e.detail);
   updateMeta();
-  render();
+  if (store.tab === 'trash') loadTrash();
+  else render();
 });
 
 
