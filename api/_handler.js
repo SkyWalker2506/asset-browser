@@ -2,6 +2,7 @@
 // Reduces ~6 lines of boilerplate per endpoint and centralizes input validation.
 
 import { readConfig, gh } from './_config.js';
+import { applyRateLimit } from './_ratelimit.js';
 
 // Asset names: kebab/snake case, no path chars
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,99}$/i;
@@ -64,13 +65,42 @@ export function isAdmin(req) {
   return h === token || q === token;
 }
 
+// Derive the rate-limit key (route name) from the file path of the calling
+// module, e.g. /api/upload.js → 'upload'. The handler() opts may override
+// it explicitly via `rateLimitName`.
+function deriveRouteName(req, override) {
+  if (typeof override === 'string' && override) return override;
+  try {
+    const u = new URL(req.url, 'http://x');
+    const p = u.pathname.replace(/^\/+|\/+$/g, '');
+    // /api/foo → 'foo'; /api/foo/bar → 'foo' (treat the prefix as the route key)
+    const parts = p.split('/').filter(Boolean);
+    const idx = parts.indexOf('api');
+    if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+    return parts[parts.length - 1] || 'DEFAULT';
+  } catch {
+    return 'DEFAULT';
+  }
+}
+
 // Wrap a handler: enforces method, ensures GITHUB_TOKEN, parses body, catches errors.
-// opts: { method?: 'POST'|'GET', requireToken?: boolean (default true) }
+// opts: { method?: 'POST'|'GET', requireToken?: boolean (default true), rateLimitName?: string,
+//         skipRateLimit?: boolean }
 export function handler(opts, fn) {
-  const { method, requireToken = true } = opts || {};
+  const { method, requireToken = true, rateLimitName, skipRateLimit = false } = opts || {};
   return async (req, res) => {
     if (method && req.method !== method) {
       return res.status(405).json({ error: `${method} only` });
+    }
+    // Rate-limit before any work. Admin token bypasses the bucket but is logged.
+    if (!skipRateLimit) {
+      const route = deriveRouteName(req, rateLimitName);
+      if (isAdmin(req)) {
+        // Log admin bypass for audit visibility (best-effort; Vercel captures stdout).
+        try { console.log(`[ratelimit] admin bypass route=${route}`); } catch {}
+      } else {
+        if (applyRateLimit(req, res, route)) return; // 429 already sent
+      }
     }
     const token = process.env.GITHUB_TOKEN;
     if (requireToken && !token) {

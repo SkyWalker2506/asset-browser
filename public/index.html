@@ -741,6 +741,11 @@ const _io = new IntersectionObserver((entries) => {
       card.removeAttribute('data-pending');
       const img = card.querySelector('img[data-src]');
       if (img) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+      // <picture><source data-srcset="..."> → lift to srcset on first paint.
+      for (const src of card.querySelectorAll('picture > source[data-srcset]')) {
+        src.srcset = src.dataset.srcset;
+        src.removeAttribute('data-srcset');
+      }
       const anim = card.querySelector('.anim-frame[data-anim]');
       if (anim) {
         anim.style.animation = anim.dataset.anim;
@@ -1059,7 +1064,11 @@ function render() {
   if (!filtered.length) { g.innerHTML = '<div class="empty">Eşleşen asset yok.</div>'; return; }
   g.innerHTML = filtered.map(i => {
     // Default: deferred-load img (data-src lifted to src on viewport intersection).
-    let thumbInner = `<img data-src="${i.src}" alt="${i.name}" decoding="async" width="160" height="160">`;
+    // When manifest carries an AVIF variant, wrap in <picture> for browsers that
+    // support it; older browsers transparently fall back to the data-src <img>.
+    let thumbInner = i.avifSrc
+      ? `<picture><source type="image/avif" data-srcset="${i.avifSrc}"><img data-src="${i.src}" alt="${i.name}" decoding="async" width="160" height="160"></picture>`
+      : `<img data-src="${i.src}" alt="${i.name}" decoding="async" width="160" height="160">`;
     // Animation playback: if strip with N frames (dim like "WxH" where W = H*N)
     if (i.type === 'Animasyon' && i.dim) {
       const m = i.dim.match(/^(\d+)x(\d+)$/);
@@ -1630,7 +1639,9 @@ function _trapHandler(e) {
 function openModal(id) {
   const i = data.items.find(x => x.id === id) || approvedAsAssets().find(x => x.id === id);
   if (!i) return;
-  let previewInner = `<img src="${i.src}">`;
+  let previewInner = i.avifSrc
+    ? `<picture><source type="image/avif" srcset="${i.avifSrc}"><img src="${i.src}"></picture>`
+    : `<img src="${i.src}">`;
   if (i.type === 'Animasyon' && i.dim) {
     const m = i.dim.match(/^(\d+)x(\d+)$/);
     const nameFrames = (i.name.match(/_(\d+)f/i) || [])[1];

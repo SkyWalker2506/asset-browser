@@ -33,6 +33,7 @@ Reusable asset browser for game/creative projects. Scans project asset dirs, gen
 - Admin token in sessionStorage by default (localStorage opt-in via prompt)
 - GitHub token never leaks into error responses
 - ETag/304 free hits on `/api/missing` and `/api/uploaded`
+- Per-IP rate limiting on every endpoint (token-bucket): 30 uploads/min, 10 destructive ops/min, 240 reads/min, 120/min default. 429 + `Retry-After` on overflow. Admin token bypasses (logged).
 
 ### A11y
 - Modal focus trap (Tab cycle), ARIA dialog roles, aria-labels on filters
@@ -79,11 +80,21 @@ vercel --prod                            # redeploy with env
 
 ```bash
 npm run dev          # build manifest + serve public/ on :5174
-npm test             # node:test on api/_handler.js validators (9 tests)
+npm test             # node:test (validators + rate-limit, 19 tests)
 npm run lint         # syntax check all api/* + scripts/*
 npm run validate     # JSON shape check on manifest + missing + config
 npm run ci           # lint + test + validate (run by GitHub Actions)
 ```
+
+### Optional: AVIF variants
+
+`npm run build -- --avif` (or `ASSET_AVIF=1 npm run build`) produces an `.avif`
+sibling for every asset using `sharp` (pixel-art settings: q75 / effort 4 /
+4:4:4 chroma). The client emits a `<picture>` element with AVIF first and the
+original as fallback. AVIF cuts payloads ~20–30% vs. WebP in our benchmarks
+but adds an encode step at build time, so it stays opt-in. `sharp` is NOT a
+package.json dependency — install it on the build host (`npm i -D sharp`)
+when enabling.
 
 CI runs on every PR and push to `main` — see `.github/workflows/ci.yml`.
 

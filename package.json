@@ -9,7 +9,7 @@
     "prebuild": "npm run build-manifest",
     "build": "node scripts/copy-assets.mjs",
     "validate": "node scripts/validate-manifest.mjs",
-    "test": "node --test api/_handler.test.js",
+    "test": "node --test api/_handler.test.js api/_ratelimit.test.js",
     "lint": "node --check api/*.js scripts/*.mjs",
     "ci": "npm run lint && npm run test && npm run validate",
     "dev": "npm run build && npx serve public -l 5174",
