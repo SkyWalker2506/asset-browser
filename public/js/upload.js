@@ -4,7 +4,7 @@
 
 import { store } from './state.js';
 import { toast, escapeHtml } from './util.js';
-import { load } from './main.js';
+import { load, srStatus } from './main.js';
 
 const ACCEPT_MIME = ['image/png', 'image/webp', 'image/gif', 'image/jpeg'];
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -94,6 +94,8 @@ export function uploadFor(name) {
     }
     if (okCount) {
       toast(okCount === 1 ? 'Yüklendi — waiting-for-review' : `${okCount} dosya yüklendi`);
+      if (okCount === 1 && list.length === 1) srStatus(list[0].name + ' yüklendi');
+      else srStatus(okCount + ' dosya yüklendi');
       setTimeout(load, 600);
     }
     if (!failCount) cleanup();

@@ -27,7 +27,18 @@ Reusable asset browser for game/creative projects. Scans project asset dirs, gen
 - `g h/t/w/d` switch tabs · `dd` delete selected
 - `Ctrl+Shift+T` toggle admin mode
 
-### Security
+## Accessibility
+
+- **Skip link**: Press Tab on page load to reveal "İçeriğe geç" — jumps directly to the asset grid
+- **Landmarks**: `<header role="banner">` and `<main>` wrapping grid + filters; modals use `role="dialog" aria-modal="true"`
+- **Grid navigation**: Arrow keys move between asset cards (roving tabindex pattern); Home/End jump to row start/end; Ctrl+Home/End to first/last card
+- **Screen reader announcements**: Filter result counts, selection counts, and bulk action outcomes are announced via `aria-live="polite"` region (200 ms throttle)
+- **Keyboard shortcuts**: Full chord system (j/k, g h/g t/d d) documented in `?` help overlay
+- **Reduced motion**: `@media (prefers-reduced-motion: reduce)` disables sprite animations and CSS transitions
+- **ARIA labels**: All interactive controls (search, filters, select elements, checkboxes) carry `aria-label` attributes
+- **Selection state**: Asset cards carry `aria-selected="true/false"` updated on each selection change
+
+## Security
 - Strict input validation on every API endpoint (name regex, filename whitelist, size cap)
 - Path traversal hardening: reject-on-invalid, segment validation, restore re-checks against `config.sources`
 - Admin token in sessionStorage by default (localStorage opt-in via prompt)

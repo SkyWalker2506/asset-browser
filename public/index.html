@@ -253,6 +253,8 @@
     .stats-panel, .stat-row .bar-fill, .dropzone { transition:none !important; }
     .dropzone.over { transform:none !important; }
   }
+  .skip-link { position:absolute; left:-9999px; top:4px; z-index:9999; background:#d4a849; color:#1a1510; padding:8px 16px; border-radius:4px; font-weight:600; text-decoration:none; }
+  .skip-link:focus { left:16px; }
   .pri-P0 { background:#7a1f1f; color:#fff; }
   .pri-P1 { background:#7a4a1f; color:#fff; }
   .pri-P2 { background:#3a2d1d; color:#c9b889; }
@@ -266,7 +268,8 @@
 </style>
 </head>
 <body>
-<header>
+<a href="#main-content" class="skip-link">İçeriğe geç</a>
+<header role="banner">
   <h1>MedievalFactory — Asset Browser</h1>
   <span class="meta" id="meta">loading…</span>
   <span class="admin-badge" id="admin-badge" title="Admin mod aktif — Ctrl+Shift+T ile kapat">admin</span>
@@ -278,13 +281,13 @@
     <button class="tab" data-tab="trash" id="trash-tab" style="display:none;">Çöp</button>
   </div>
   <div class="controls">
-    <input id="q" placeholder="Ara — cat:building tag:hd type:animasyon …" title="Operatörler: cat: kind: type: status: ext: dim: tag: (! ile negation, | ile OR)">
-    <select id="type">
+    <input id="q" placeholder="Ara — cat:building tag:hd type:animasyon …" title="Operatörler: cat: kind: type: status: ext: dim: tag: (! ile negation, | ile OR)" aria-label="Arama">
+    <select id="type" aria-label="Tip filtresi">
       <option value="">Tüm tipler</option>
       <option value="Resim">Resim</option>
       <option value="Animasyon">Animasyon</option>
     </select>
-    <select id="cat">
+    <select id="cat" aria-label="Kategori filtresi">
       <option value="">Tüm kategoriler</option>
     </select>
     <select id="ext" aria-label="Format filtresi">
@@ -301,7 +304,8 @@
     </select>
   </div>
 </header>
-<div class="chips" id="chips"></div>
+<main id="main-content" role="main">
+<div class="chips" id="chips" aria-label="Kategori filtreleri"></div>
 <div class="chips" id="saved-filters-bar" style="border-top:0;padding-top:6px;padding-bottom:6px;">
   <span style="font-size:11px;color:#8b6b3d;margin-right:4px;">Kaydedilenler:</span>
   <span id="saved-filters"></span>
@@ -312,7 +316,8 @@
   <div class="stats-grid" id="stats-grid" aria-live="polite"></div>
 </details>
 <div class="grid" id="grid"></div>
-<div class="modal" id="modal">
+</main>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="Asset detayı">
   <button class="close">×</button>
   <div class="box" id="box"></div>
 </div>
@@ -335,6 +340,7 @@
       <tr><td>g t</td><td>Eksik sekmesi</td></tr>
       <tr><td>g w</td><td>Bekleyen sekmesi</td></tr>
       <tr><td>g d</td><td>Reddedilen sekmesi</td></tr>
+      <tr><td>↑ ↓ ← →</td><td>Grid içinde gezin (yön tuşları)</td></tr>
       <tr><td>j / k</td><td>Sonraki / önceki kart</td></tr>
       <tr><td>Enter</td><td>Odaklı kartı aç</td></tr>
       <tr><td>x</td><td>Odaklı kartı seç/seçimden çıkar</td></tr>
@@ -349,6 +355,7 @@
     </div>
   </div>
 </div>
+<div id="sr-status" role="status" aria-live="polite" aria-atomic="true" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;"></div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -48,6 +48,15 @@ import {
 } from './selection.js';
 import { installKeyboard } from './keyboard.js';
 
+let _srTimer;
+export function srStatus(msg) {
+  clearTimeout(_srTimer);
+  _srTimer = setTimeout(() => {
+    const el = document.getElementById('sr-status');
+    if (el) el.textContent = msg;
+  }, 200);
+}
+
 // --- Boot
 export async function load() {
   document.getElementById('meta').textContent = 'loading…';
@@ -126,14 +135,30 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
 
 // Filter/Sort inputs delegation
 document.body.addEventListener('input', e => {
-  if (e.target.id === 'q') { store.filter.q = e.target.value; render(); }
+  if (e.target.id === 'q') {
+    store.filter.q = e.target.value;
+    render();
+    setTimeout(() => {
+      const count = document.querySelectorAll('#grid .card, #grid .miss').length;
+      srStatus(count + ' asset gösteriliyor');
+    }, 50);
+  }
 });
 document.body.addEventListener('change', e => {
   const id = e.target.id;
-  if (id === 'cat') { store.filter.cat = e.target.value; render(); }
-  else if (id === 'ext') { store.filter.ext = e.target.value; render(); }
-  else if (id === 'type') { store.filter.type = e.target.value; render(); }
-  else if (id === 'sort') { setSortMode(e.target.value); render(); }
+  let changed = false;
+  if (id === 'cat') { store.filter.cat = e.target.value; changed = true; }
+  else if (id === 'ext') { store.filter.ext = e.target.value; changed = true; }
+  else if (id === 'type') { store.filter.type = e.target.value; changed = true; }
+  else if (id === 'sort') { setSortMode(e.target.value); changed = true; }
+  
+  if (changed) {
+    render();
+    setTimeout(() => {
+      const count = document.querySelectorAll('#grid .card, #grid .miss').length;
+      srStatus(count + ' asset gösteriliyor');
+    }, 50);
+  }
 });
 
 // Initial sort value
@@ -143,7 +168,7 @@ document.getElementById('sort').value = store.sortMode;
 const actionMap = {
   'save-filter': () => saveCurrentAsFilter(),
   'bulk-cancel': clearSelection,
-  'bulk-delete': bulkDelete,
+  'bulk-delete': async () => { await bulkDelete(); srStatus('Silme tamamlandı'); },
   'bulk-restore': bulkRestore,
   'bulk-clear': bulkClear,
 };
@@ -164,11 +189,13 @@ document.getElementById('grid').addEventListener('click', e => {
   if (checkbox) {
     e.preventDefault(); e.stopPropagation();
     toggleSelection(card, { shift: e.shiftKey });
+    srStatus(selection.size + ' seçili');
     return;
   }
   if (e.shiftKey && selection.size > 0) {
     e.preventDefault(); e.stopPropagation();
     toggleSelection(card, { shift: true });
+    srStatus(selection.size + ' seçili');
   }
 }, true);
 

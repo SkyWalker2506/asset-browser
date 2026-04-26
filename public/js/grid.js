@@ -224,7 +224,9 @@ export function refreshSelectionUI() {
   document.querySelectorAll('.card, .miss').forEach(el => {
     const id = el.id || '';
     const k = (id.startsWith('asset-') || id.startsWith('miss-') || id.startsWith('trash-')) ? id : null;
-    el.classList.toggle('selected', !!k && selection.has(k));
+    const isSelected = !!k && selection.has(k);
+    el.classList.toggle('selected', isSelected);
+    if (k) el.setAttribute('aria-selected', isSelected ? 'true' : 'false');
   });
 }
 
@@ -266,7 +268,7 @@ export function render() {
       }
       if (i.uploadedFile) actions.push(`<a class="btn" href="/api/uploaded?file=${encodeURIComponent(i.uploadedFile)}" download="${i.uploadedFile}">İndir</a>`);
       return `
-      <div class="miss" id="miss-${cssEsc(i.name)}" data-name="${escapeHtml(i.name)}" tabindex="-1">
+      <div class="miss" id="miss-${cssEsc(i.name)}" data-name="${escapeHtml(i.name)}" role="gridcell" aria-selected="false" aria-label="${escapeHtml(i.name)}, ${escapeHtml(i.status)}" tabindex="-1">
         <span class="select-checkbox" role="checkbox" aria-label="Seç" tabindex="0"></span>
         <h3>${i.name}</h3>
         <div class="meta">
@@ -282,7 +284,11 @@ export function render() {
         <div class="actions">${actions.join('')}</div>
       </div>`;
     }).join('');
+    g.setAttribute('role', 'grid');
+    g.setAttribute('aria-rowcount', String(filtered.length));
+    g.setAttribute('aria-label', 'Eksik asset listesi');
     refreshSelectionUI();
+    setRovingTabindex(null);
     return;
   }
   const haveItems = itemsForTab();
@@ -319,8 +325,9 @@ export function render() {
     const delBtn = i._approved
       ? `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();unapproveAsset(${JSON.stringify(i.name).replace(/"/g, '&quot;')})">Sil (Eksikler'e gönder)</button>`
       : `<button class="dl" style="background:#4d1f1f;border:none;cursor:pointer;" onclick="event.stopPropagation();deleteAsset(${JSON.stringify(i.file).replace(/"/g, '&quot;')},${JSON.stringify(sourceDirFor(i)).replace(/"/g, '&quot;')})">Sil</button>`;
+    const aLabel = escapeHtml(`${i.name}, ${i.category}, ${i.type}`);
     return `
-    <div class="card" id="asset-${cssEsc(i.name)}" data-pending="1" data-name="${escapeHtml(i.name)}" tabindex="-1">
+    <div class="card" id="asset-${cssEsc(i.name)}" data-pending="1" data-name="${escapeHtml(i.name)}" role="gridcell" aria-selected="false" aria-label="${aLabel}" tabindex="-1">
       <span class="select-checkbox" role="checkbox" aria-label="Seç" tabindex="0"></span>
       <div class="thumb" onclick="openModal('${i.id}')">${thumbInner}</div>
       <div class="info">
@@ -332,6 +339,20 @@ export function render() {
       </div>
     </div>`;
   }).join('');
+  g.setAttribute('role', 'grid');
+  g.setAttribute('aria-rowcount', String(filtered.length));
+  g.setAttribute('aria-label', 'Asset galerisi');
   observeCards();
   refreshSelectionUI();
+  setRovingTabindex(null);
+}
+
+export function setRovingTabindex(activeEl) {
+  const all = document.querySelectorAll('#grid .card, #grid .miss');
+  all.forEach(el => el.setAttribute('tabindex', '-1'));
+  if (activeEl) {
+    activeEl.setAttribute('tabindex', '0');
+  } else if (all.length) {
+    all[0].setAttribute('tabindex', '0');
+  }
 }
