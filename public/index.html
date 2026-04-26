@@ -200,6 +200,73 @@
     .anim-frame { animation: none !important; }
     * { transition: none !important; }
   }
+  /* Drop zone (upload modal) */
+  .upload-box {
+    background:#1a1510; border:2px solid #d4a849; border-radius:8px;
+    padding:24px 28px; max-width:520px; width:90vw; position:relative;
+  }
+  .dropzone {
+    border:2px dashed #5c4428; border-radius:8px; padding:36px 20px;
+    text-align:center; background:#0f0b07; cursor:pointer;
+    transition:border-color .15s, background .15s, transform .15s;
+    outline:none;
+  }
+  .dropzone:hover, .dropzone:focus-visible { border-color:#d4a849; background:#15110a; }
+  .dropzone:focus-visible { box-shadow:0 0 0 3px rgba(212,168,73,.35); }
+  .dropzone.over {
+    border-color:#d4a849; background:#2a1f15; transform:scale(1.01);
+    box-shadow:inset 0 0 0 2px rgba(212,168,73,.5);
+  }
+  .dz-icon { font-size:36px; color:#d4a849; line-height:1; margin-bottom:10px; }
+  .dz-title { font-size:15px; color:#e8dcc0; font-weight:600; }
+  .dz-sub { font-size:12px; color:#8b6b3d; margin:8px 0 12px; }
+  .dz-browse {
+    background:#5c4428; color:#e8dcc0; border:none; padding:8px 18px;
+    border-radius:4px; font-size:13px; cursor:pointer; font-weight:600;
+  }
+  .dz-browse:hover, .dz-browse:focus-visible { background:#d4a849; color:#1a1510; outline:none; }
+  .dz-hint { margin-top:14px; font-size:12px; min-height:16px; }
+  /* Stats panel */
+  .stats-panel {
+    background:#110d08; border-bottom:1px solid #3a2d1d;
+    padding:0; overflow:hidden; transition:max-height .25s ease;
+  }
+  .stats-panel summary {
+    list-style:none; cursor:pointer; padding:8px 24px; font-size:12px;
+    color:#8b6b3d; user-select:none; display:flex; align-items:center; gap:8px;
+  }
+  .stats-panel summary::-webkit-details-marker { display:none; }
+  .stats-panel summary::before {
+    content:'▶'; display:inline-block; transition:transform .15s; font-size:9px; color:#5c4428;
+  }
+  .stats-panel[open] summary::before { transform:rotate(90deg); }
+  .stats-panel summary:hover { color:#d4a849; }
+  .stats-grid {
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+    gap:12px; padding:6px 24px 16px;
+  }
+  .stat-card {
+    background:#0f0b07; border:1px solid #3a2d1d; border-radius:6px; padding:10px 12px;
+  }
+  .stat-card h4 {
+    margin:0 0 8px; font-size:10px; color:#8b6b3d; text-transform:uppercase;
+    letter-spacing:.5px; font-weight:600;
+  }
+  .stat-card .total {
+    font-size:22px; color:#d4a849; font-weight:700; line-height:1;
+  }
+  .stat-bars { margin-top:6px; }
+  .stat-row {
+    display:flex; align-items:center; gap:6px; margin:3px 0; font-size:11px;
+  }
+  .stat-row .label { color:#c9b889; min-width:70px; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stat-row .bar { flex:1; height:6px; background:#2a1f15; border-radius:3px; overflow:hidden; }
+  .stat-row .bar-fill { height:100%; background:linear-gradient(90deg,#8b6b3d,#d4a849); transition:width .25s; }
+  .stat-row .count { color:#8b6b3d; min-width:26px; text-align:right; font-variant-numeric:tabular-nums; }
+  @media (prefers-reduced-motion: reduce) {
+    .stats-panel, .stat-row .bar-fill, .dropzone { transition:none !important; }
+    .dropzone.over { transform:none !important; }
+  }
   .pri-P0 { background:#7a1f1f; color:#fff; }
   .pri-P1 { background:#7a4a1f; color:#fff; }
   .pri-P2 { background:#3a2d1d; color:#c9b889; }
@@ -254,6 +321,10 @@
   <span id="saved-filters"></span>
   <button class="save-filter-btn" onclick="saveCurrentAsFilter()" title="Mevcut filtreyi kaydet">+ Kaydet</button>
 </div>
+<details class="stats-panel" id="stats-panel">
+  <summary><span>İstatistikler</span><span id="stats-summary" style="margin-left:auto;color:#5c4428;font-size:11px;"></span></summary>
+  <div class="stats-grid" id="stats-grid" aria-live="polite"></div>
+</details>
 <div class="grid" id="grid"></div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
   <button class="close" onclick="closeModal()">×</button>
@@ -285,6 +356,7 @@
       <tr><td>Ctrl/Cmd+A</td><td>Tümünü seç (görünür)</td></tr>
       <tr><td>d d</td><td>Seçilenleri sil</td></tr>
       <tr><td>Ctrl+Shift+T</td><td>Admin modu aç/kapat</td></tr>
+      <tr><td>Ctrl/Cmd+V</td><td>Upload modal açıkken yapıştır + yükle</td></tr>
     </table>
     <div style="margin-top:14px;text-align:right;">
       <button onclick="closeHelp()" style="padding:8px 16px;background:#5c4428;color:#e8dcc0;border:none;border-radius:4px;cursor:pointer;">Tamam</button>
@@ -736,11 +808,14 @@ async function load() {
   data = r; missing = m; config = c;
   updateTabVisibility();
   refreshAdminBadge();
-  // probe trash count (public endpoint)
+  // probe trash count (public endpoint) — also feeds stats panel
   fetchJson('/api/trash').then(t => {
     const count = (t.files || []).filter(f => !f.name.endsWith('.meta.json')).length;
+    _trashCountCache = count;
     const trashTab = document.getElementById('trash-tab');
     trashTab.style.display = (count || getAdminToken()) ? '' : 'none';
+    // Re-render stats once trash count arrives (cheap — no grid rebuild)
+    if (document.getElementById('stats-panel')?.open) renderStats();
   }).catch(() => {});
   updateMeta();
   buildChips();
@@ -807,6 +882,76 @@ function updateMeta() {
   }
 }
 
+// Stats panel: counts current tab + filtered subset + missing/trash totals.
+// Bar widths use innerHTML once per render — cheap. CSP-friendly (no eval).
+let _trashCountCache = 0;
+function buildBarRows(map, total) {
+  const entries = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (!entries.length) return '<div style="font-size:11px;color:#5c4428;">veri yok</div>';
+  const max = Math.max(...entries.map(e => e[1])) || 1;
+  return entries.map(([k, v]) => {
+    const pct = Math.round((v / max) * 100);
+    return `<div class="stat-row"><span class="label" title="${escapeHtml(k)}">${escapeHtml(k)}</span><span class="bar"><span class="bar-fill" style="width:${pct}%"></span></span><span class="count">${v}</span></div>`;
+  }).join('');
+}
+function renderStats(filteredCount) {
+  const grid = document.getElementById('stats-grid');
+  const summary = document.getElementById('stats-summary');
+  if (!grid) return;
+  // Total assets in current tab (pre-filter)
+  const tabItems = itemsForTab();
+  const total = tabItems.length;
+  // Filtered (post-filter) — this is what user sees
+  const visible = filteredCount == null ? total : filteredCount;
+  // Breakdowns: choose by tab
+  let catMap = {}, kindMap = {}, typeMap = {};
+  for (const i of tabItems) {
+    const c = i.category || i.kind || '—';
+    catMap[c] = (catMap[c] || 0) + 1;
+    if (i.kind) kindMap[i.kind] = (kindMap[i.kind] || 0) + 1;
+    if (i.type) typeMap[i.type] = (typeMap[i.type] || 0) + 1;
+  }
+  // Status mix from missing.json (always meaningful)
+  const statusMap = {};
+  for (const i of (missing.items || [])) {
+    statusMap[i.status || 'todo'] = (statusMap[i.status || 'todo'] || 0) + 1;
+  }
+  const missingCount = (missing.items || []).filter(i => i.status === 'todo' || i.status === 'in-progress').length;
+  const waitingCount = (missing.items || []).filter(i => i.status === 'waiting-for-review').length;
+  const approvedCount = (missing.items || []).filter(i => i.status === 'approved').length;
+
+  grid.innerHTML = `
+    <div class="stat-card">
+      <h4>Toplam (${tab})</h4>
+      <div class="total">${total}</div>
+      <div class="dz-sub" style="margin:6px 0 0;">filtreli: <b style="color:#c9b889;">${visible}</b></div>
+    </div>
+    <div class="stat-card">
+      <h4>Kategori</h4>
+      <div class="stat-bars">${buildBarRows(catMap, total)}</div>
+    </div>
+    <div class="stat-card">
+      <h4>Kind</h4>
+      <div class="stat-bars">${buildBarRows(kindMap, total)}</div>
+    </div>
+    <div class="stat-card">
+      <h4>Tip</h4>
+      <div class="stat-bars">${buildBarRows(typeMap, total)}</div>
+    </div>
+    <div class="stat-card">
+      <h4>Workflow durumu</h4>
+      <div class="stat-bars">${buildBarRows(statusMap, (missing.items || []).length)}</div>
+    </div>
+    <div class="stat-card">
+      <h4>Kuyruklar</h4>
+      <div class="stat-row"><span class="label">Eksik</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100,missingCount*5)}%"></span></span><span class="count">${missingCount}</span></div>
+      <div class="stat-row"><span class="label">Bekleyen</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100,waitingCount*8)}%;background:linear-gradient(90deg,#7a6a1f,#d4a849);"></span></span><span class="count">${waitingCount}</span></div>
+      <div class="stat-row"><span class="label">Onaylı</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100,approvedCount*4)}%;background:linear-gradient(90deg,#2a5a2a,#7abb7a);"></span></span><span class="count">${approvedCount}</span></div>
+      <div class="stat-row"><span class="label">Çöp</span><span class="bar"><span class="bar-fill" style="width:${Math.min(100,_trashCountCache*4)}%;background:linear-gradient(90deg,#4d1f1f,#c94d4d);"></span></span><span class="count">${_trashCountCache}</span></div>
+    </div>`;
+  if (summary) summary.textContent = `${visible}/${total} görünen · ${missingCount} eksik · ${waitingCount} bekleyen`;
+}
+
 function buildCatSelect() {
   fillSelect('cat', [...new Set(data.items.map(i => i.category))].sort());
   fillSelect('ext', [...new Set(data.items.map(i => i.ext))].sort().map(e => e.toUpperCase()));
@@ -857,6 +1002,7 @@ function render() {
       (!filter.kind || i.kind === filter.kind) &&
       (!filter.type || i.type === filter.type)
     );
+    renderStats(filtered.length);
     if (!filtered.length) { g.innerHTML = `<div class="empty">Liste boş.</div>`; return; }
     g.innerHTML = filtered.map(i => {
       const preview = i.uploadedFile
@@ -909,6 +1055,7 @@ function render() {
     (!filter.kind || i.kind === filter.kind) &&
     (!filter.type || i.type === filter.type)
   ));
+  renderStats(filtered.length);
   if (!filtered.length) { g.innerHTML = '<div class="empty">Eşleşen asset yok.</div>'; return; }
   g.innerHTML = filtered.map(i => {
     // Default: deferred-load img (data-src lifted to src on viewport intersection).
@@ -1002,6 +1149,8 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
   t.classList.add('active');
   tab = t.dataset.tab;
+  const statsPanel = document.getElementById('stats-panel');
+  if (statsPanel) statsPanel.style.display = (tab === 'trash') ? 'none' : '';
   if (tab === 'trash') { loadTrash(); return; }
   const inMissing = tab !== 'have';
   document.querySelectorAll('.controls select').forEach(el => {
@@ -1032,39 +1181,161 @@ async function copyPrompt(name) {
   toast('Prompt kopyalandı');
 }
 
-function uploadFor(name) {
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.accept = 'image/png,image/webp,image/gif,image/jpeg';
-  inp.onchange = async () => {
-    const file = inp.files[0]; if (!file) return;
-    if (file.size > 20 * 1024 * 1024) return toast('20MB üstü kabul edilmiyor', 'err');
-    // Duplicate detection: warn if filename or pattern already exists.
-    const dup = missing.items.find(i => i.uploadedFile === file.name && i.name !== name)
-      || data.items.find(i => i.file === file.name);
-    if (dup) {
-      const proceed = confirm(`"${file.name}" zaten kullanımda (${dup.name || dup.file}). Yine de yüklensin mi?`);
-      if (!proceed) return;
-    }
-    toast('Yükleniyor…');
+// Sends one File object to /api/upload, returns the parsed response or throws.
+const ACCEPT_MIME = ['image/png','image/webp','image/gif','image/jpeg'];
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+async function performUpload(name, file) {
+  if (!ACCEPT_MIME.includes(file.type) && !/\.(png|webp|gif|jpe?g)$/i.test(file.name)) {
+    throw new Error(`Desteklenmeyen format: ${file.type || file.name}`);
+  }
+  if (file.size > MAX_UPLOAD_BYTES) throw new Error('20MB üstü kabul edilmiyor');
+  const dup = missing.items.find(i => i.uploadedFile === file.name && i.name !== name)
+    || data.items.find(i => i.file === file.name);
+  if (dup) {
+    const proceed = confirm(`"${file.name}" zaten kullanımda (${dup.name || dup.file}). Yine de yüklensin mi?`);
+    if (!proceed) throw new Error('İptal edildi');
+  }
+  const dataBase64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = async () => {
-      const dataBase64 = String(reader.result).split(',')[1];
-      try {
-        const r = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, filename: file.name, dataBase64 }),
-        });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error || 'upload failed');
-        toast('Yüklendi — waiting-for-review');
-        setTimeout(load, 800);
-      } catch (e) { toast(String(e.message), 'err'); }
-    };
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = () => reject(new Error('dosya okunamadı'));
     reader.readAsDataURL(file);
+  });
+  const r = await fetch('/api/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, filename: file.name, dataBase64 }),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'upload failed');
+  return j;
+}
+
+// Drop-zone modal: drag/drop, paste, click-to-browse. Keyboard fallback via "Gözat" button.
+// Counter pattern for dragenter/dragleave (children fire spurious leave events otherwise).
+let _dropCounter = 0;
+let _dropCleanup = null;
+function uploadFor(name) {
+  // If a previous drop-zone is open, close it first.
+  if (_dropCleanup) _dropCleanup();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal open';
+  overlay.id = 'upload-modal';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', `${name} için dosya yükle`);
+  overlay.style.zIndex = '250';
+  overlay.innerHTML = `
+    <div class="upload-box" tabindex="-1">
+      <button class="close" aria-label="Kapat" data-close>×</button>
+      <h2 style="margin:0 0 6px;color:#d4a849;font-size:18px;">Yükle: ${escapeHtml(name)}</h2>
+      <p style="margin:0 0 14px;color:#8b6b3d;font-size:12px;">PNG / WebP / GIF / JPEG · max 20 MB</p>
+      <div class="dropzone" id="dz" tabindex="0" role="button"
+           aria-label="Dosyayı buraya sürükleyin veya gözatmak için Enter'a basın">
+        <div class="dz-icon" aria-hidden="true">⤓</div>
+        <div class="dz-title">Dosyayı buraya sürükleyin</div>
+        <div class="dz-sub">veya yapıştırın (Ctrl+V) · ya da</div>
+        <button type="button" class="dz-browse" data-browse>Gözat…</button>
+        <div class="dz-hint" id="dz-hint" aria-live="polite"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const dz = overlay.querySelector('#dz');
+  const hint = overlay.querySelector('#dz-hint');
+  const lastFocus = document.activeElement;
+  setTimeout(() => dz.focus(), 0);
+
+  const setHint = (msg, kind) => {
+    hint.textContent = msg || '';
+    hint.style.color = kind === 'err' ? '#c94d4d' : kind === 'ok' ? '#7abb7a' : '#8b6b3d';
   };
-  inp.click();
+
+  const sendFiles = async (files) => {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    if (list.length > 1) setHint(`${list.length} dosya · sırayla yükleniyor`, '');
+    let okCount = 0, failCount = 0;
+    for (const f of list) {
+      setHint(`Yükleniyor: ${f.name}`, '');
+      try {
+        await performUpload(name, f);
+        okCount++;
+      } catch (e) {
+        failCount++;
+        setHint(`Hata: ${e.message}`, 'err');
+      }
+    }
+    if (okCount) {
+      toast(okCount === 1 ? 'Yüklendi — waiting-for-review' : `${okCount} dosya yüklendi`);
+      setTimeout(load, 600);
+    }
+    if (!failCount) cleanup();
+  };
+
+  const browse = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = ACCEPT_MIME.join(',');
+    inp.multiple = true;
+    inp.onchange = () => sendFiles(inp.files);
+    inp.click();
+  };
+
+  const onPaste = (e) => {
+    if (!overlay.parentNode) return;
+    const items = e.clipboardData?.files || [];
+    if (items.length) { e.preventDefault(); sendFiles(items); }
+  };
+  const onDragEnter = (e) => {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    e.preventDefault();
+    _dropCounter++;
+    dz.classList.add('over');
+  };
+  const onDragOver = (e) => {
+    if (!e.dataTransfer?.types?.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+  const onDragLeave = () => {
+    _dropCounter = Math.max(0, _dropCounter - 1);
+    if (_dropCounter === 0) dz.classList.remove('over');
+  };
+  const onDrop = (e) => {
+    e.preventDefault();
+    _dropCounter = 0;
+    dz.classList.remove('over');
+    sendFiles(e.dataTransfer?.files);
+  };
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); cleanup(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && document.activeElement === dz) {
+      e.preventDefault(); browse();
+    }
+  };
+  const onClick = (e) => {
+    if (e.target.matches('[data-close]') || e.target === overlay) cleanup();
+    else if (e.target.matches('[data-browse]')) browse();
+    else if (e.target.closest('#dz') && !e.target.matches('[data-browse]')) browse();
+  };
+
+  dz.addEventListener('dragenter', onDragEnter);
+  dz.addEventListener('dragover', onDragOver);
+  dz.addEventListener('dragleave', onDragLeave);
+  dz.addEventListener('drop', onDrop);
+  overlay.addEventListener('click', onClick);
+  document.addEventListener('keydown', onKey);
+  document.addEventListener('paste', onPaste);
+
+  function cleanup() {
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('paste', onPaste);
+    overlay.remove();
+    _dropCounter = 0;
+    _dropCleanup = null;
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+  }
+  _dropCleanup = cleanup;
 }
 
 async function reviewAction(name, action) {
