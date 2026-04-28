@@ -1,0 +1,9 @@
+{
+  "title": "My Project",
+  "projectRoot": "..",
+  "sources": [
+    { "dir": "assets", "category": "Assets", "tag": "asset" }
+  ],
+  "github": { "owner": "YOUR_USER", "repo": "YOUR_REPO", "branch": "main" },
+  "uploadPath": "asset-browser/data/uploads"
+}
