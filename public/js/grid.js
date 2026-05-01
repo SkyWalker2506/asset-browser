@@ -349,6 +349,7 @@ export function render() {
         <div class="d"><span>${i.dim || '—'}</span><span>${fmtSize(i.size)}</span></div>
         ${approvedBadge}<span class="tag">${i.kind}</span> <span class="tag" style="background:${i.type === 'Animasyon' ? '#8b4d1e' : '#3a2d1d'}">${i.type}</span>
         <a class="dl" href="${i.src}" download="${i.file}" onclick="event.stopPropagation()" data-i18n="actions.download">${t('actions.download')}</a>
+        <button class="dl" style="background:#2a323c;border:1px solid #4ae8f0;color:#4ae8f0;cursor:pointer;font-family:inherit;" onclick="event.stopPropagation();copyAssetUrl('${i.src}', this)" data-i18n="actions.copy_link">${t('actions.copy_link') || 'Link Kopyala'}</button>
         ${delBtn}
       </div>
     </div>`;
@@ -370,3 +371,22 @@ export function setRovingTabindex(activeEl) {
     all[0].setAttribute('tabindex', '0');
   }
 }
+
+// Copy asset URL to clipboard so it can be embedded in prompts (e.g. animation references)
+window.copyAssetUrl = function(src, btn) {
+  const absUrl = new URL(src, window.location.origin).href;
+  navigator.clipboard.writeText(absUrl).then(() => {
+    const original = btn.textContent;
+    btn.textContent = '✓ Kopyalandı';
+    btn.style.background = '#ff9038';
+    btn.style.color = '#15110d';
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.style.background = '#2a323c';
+      btn.style.color = '#4ae8f0';
+    }, 1500);
+  }).catch(err => {
+    btn.textContent = '✗ Hata';
+    console.error('clipboard:', err);
+  });
+};
